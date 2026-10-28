@@ -652,33 +652,51 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
       if (error) notify('Não foi possível salvar agora, mas você ainda pode enviar a mensagem');
     }
 
-    // LÓGICA DO LINK UNIVERSAL (.ICS) DE 1 CLIQUE
+    // --- LÓGICA DE AGENDAMENTO INTELIGENTE ---
     const [startH, startM] = time.split(':').map(Number);
     const duration = selectedService.duration_minutes || 45;
     const endMins = startH * 60 + startM + duration;
     const endH = Math.floor(endMins / 60);
     const endM = endMins % 60;
 
-    // Formato ISO exigido (com fuso horário de Brasília -03:00 para cair na hora exata)
+    const title = encodeURIComponent(`${selectedService.name} - ${name}`);
+
+    // Link nativo para Android / Google (Sem download)
+    const gStart = `202610${date}T${String(startH).padStart(2, '0')}${String(startM).padStart(2, '0')}00`;
+    const gEnd = `202610${date}T${String(endH).padStart(2, '0')}${String(endM).padStart(2, '0')}00`;
+    const googleLink = `https://calendar.google.com/calendar/event?action=TEMPLATE&text=${title}&dates=${gStart}/${gEnd}`;
+
+    // Link ICS nativo para iPhone / Outlook (Abre modal de agenda no iOS direto)
     const isoStart = `2026-10-${date}T${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}:00-03:00`;
     const isoEnd = `2026-10-${date}T${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00-03:00`;
+    const appleLink = `https://ics.agical.io/?subject=${title}&dtstart=${isoStart}&dtend=${isoEnd}`;
 
-    const title = encodeURIComponent(`${selectedService.name} - ${name}`);
-    const desc = encodeURIComponent(`Cliente: ${name} | Tel: ${phone} | Profissional: ${selectedProfessional?.name}`);
-    
-    // Link gerador de ICS Universal
-    const linkAgenda = `https://ics.agical.io/?subject=${title}&dtstart=${isoStart}&dtend=${isoEnd}&description=${desc}`;
+    // Variáveis que vão guardar os links encurtados
+    let shortGoogle = googleLink;
+    let shortApple = appleLink;
+
+    // Encurtador automático via API antes de mandar para o WhatsApp
+    try {
+      const resG = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(googleLink)}`);
+      if (resG.ok) shortGoogle = await resG.text();
+      
+      const resA = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(appleLink)}`);
+      if (resA.ok) shortApple = await resA.text();
+    } catch (e) {
+      console.log('Falha ao encurtar link, enviando link original comprimido');
+    }
 
     const pixLine = paymentMethod === 'pix' && pixKey ? `\n*Pagamento:* Pix (chave: ${pixKey})` : '\n*Pagamento:* No local';
     
-    // Mensagem Limpa com Link Único
+    // A MENSAGEM LIMPA E MODERNA
     const message = `Olá, ${tenant.name}! Gostaria de confirmar meu agendamento.\n\n` +
       `*Cliente:* ${name}\n` +
       `*Serviço:* ${selectedService.name}\n` +
-      `*Profissional:* ${selectedProfessional?.name ?? 'Não especificado'}\n` +
       `*Data:* ${date} de outubro às ${time}\n` +
       `*Valor:* R$ ${servicePrice.toFixed(2)}${pixLine}\n\n` +
-      `📅 *Adicionar à Agenda (1 clique):*\n${linkAgenda}`;
+      `📅 *Adicionar à Agenda (1 Clique):*\n` +
+      `🤖 Android/Web: ${shortGoogle}\n` +
+      `🍎 iPhone/Mac: ${shortApple}`;
 
     window.open(`https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
     setStep(4);
