@@ -592,7 +592,7 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
   
   const allTimes = ['09:00', '09:45', '10:30', '11:15', '13:30', '14:15', '15:00', '16:30'];
 
-  // Carrega horários ocupados do Supabase
+  // Carrega do Supabase os horários ocupados para o profissional e data selecionados
   useEffect(() => {
     if (!tenant || !selectedProfessional) return;
     const selectedDateObj = dates.find(d => d.date === date);
@@ -616,6 +616,7 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
     void loadOccupiedTimes();
   }, [tenant, selectedProfessional, date]);
 
+  // Filtra removendo os horários ocupados no banco de dados
   const times = allTimes.filter(t => !bookedAppointments.includes(t));
 
   const pixKey = selectedProfessional?.pix_key || tenant.pix_key || '';
@@ -626,6 +627,59 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
     navigator.clipboard?.writeText(pixKey);
     setPixCopied(true);
     window.setTimeout(() => setPixCopied(false), 2200);
+  };
+
+  // Gerador NATIVO do arquivo .ics no próprio navegador (iPhone e Android)
+  const downloadIcsFile = () => {
+    if (!selectedService) return;
+    const [startH, startM] = time.split(':').map(Number);
+    const duration = selectedService.duration_minutes || 45;
+    const endMins = startH * 60 + startM + duration;
+    const endH = Math.floor(endMins / 60);
+    const endM = endMins % 60;
+
+    const gStart = `202610${date}T${String(startH).padStart(2, '0')}${String(startM).padStart(2, '0')}00`;
+    const gEnd = `202610${date}T${String(endH).padStart(2, '0')}${String(endM).padStart(2, '0')}00`;
+
+    const icsContent = 
+`BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Marco Agendamentos//PT
+BEGIN:VEVENT
+SUMMARY:${selectedService.name} - ${tenant.name}
+DESCRIPTION:Cliente: ${name}\\nProfissional: ${selectedProfessional?.name}\\nContato: ${phone}
+LOCATION:${tenant.city || 'São Paulo, SP'}
+DTSTART:${gStart}
+DTEND:${gEnd}
+END:VEVENT
+END:VCALENDAR`;
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agendamento-${date}-outubro.ics`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  // Link do Google Agenda para quem estiver no PC/Android
+  const openGoogleCalendar = () => {
+    if (!selectedService) return;
+    const [startH, startM] = time.split(':').map(Number);
+    const duration = selectedService.duration_minutes || 45;
+    const endMins = startH * 60 + startM + duration;
+    const endH = Math.floor(endMins / 60);
+    const endM = endMins % 60;
+
+    const gStart = `202610${date}T${String(startH).padStart(2, '0')}${String(startM).padStart(2, '0')}00`;
+    const gEnd = `202610${date}T${String(endH).padStart(2, '0')}${String(endM).padStart(2, '0')}00`;
+
+    const title = encodeURIComponent(`${selectedService.name} - ${tenant.name}`);
+    const details = encodeURIComponent(`Cliente: ${name}\nProfissional: ${selectedProfessional?.name}`);
+    
+    window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${gStart}/${gEnd}&details=${details}`, '_blank');
   };
 
   const submit = async (event: FormEvent) => {
@@ -652,51 +706,15 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
       if (error) notify('Não foi possível salvar agora, mas você ainda pode enviar a mensagem');
     }
 
-    // --- LÓGICA DE AGENDAMENTO INTELIGENTE ---
-    const [startH, startM] = time.split(':').map(Number);
-    const duration = selectedService.duration_minutes || 45;
-    const endMins = startH * 60 + startM + duration;
-    const endH = Math.floor(endMins / 60);
-    const endM = endMins % 60;
-
-    const title = encodeURIComponent(`${selectedService.name} - ${name}`);
-
-    // Link nativo para Android / Google (Sem download)
-    const gStart = `202610${date}T${String(startH).padStart(2, '0')}${String(startM).padStart(2, '0')}00`;
-    const gEnd = `202610${date}T${String(endH).padStart(2, '0')}${String(endM).padStart(2, '0')}00`;
-    const googleLink = `https://calendar.google.com/calendar/event?action=TEMPLATE&text=${title}&dates=${gStart}/${gEnd}`;
-
-    // Link ICS nativo para iPhone / Outlook (Abre modal de agenda no iOS direto)
-    const isoStart = `2026-10-${date}T${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}:00-03:00`;
-    const isoEnd = `2026-10-${date}T${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00-03:00`;
-    const appleLink = `https://ics.agical.io/?subject=${title}&dtstart=${isoStart}&dtend=${isoEnd}`;
-
-    // Variáveis que vão guardar os links encurtados
-    let shortGoogle = googleLink;
-    let shortApple = appleLink;
-
-    // Encurtador automático via API antes de mandar para o WhatsApp
-    try {
-      const resG = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(googleLink)}`);
-      if (resG.ok) shortGoogle = await resG.text();
-      
-      const resA = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(appleLink)}`);
-      if (resA.ok) shortApple = await resA.text();
-    } catch (e) {
-      console.log('Falha ao encurtar link, enviando link original comprimido');
-    }
-
     const pixLine = paymentMethod === 'pix' && pixKey ? `\n*Pagamento:* Pix (chave: ${pixKey})` : '\n*Pagamento:* No local';
     
-    // A MENSAGEM LIMPA E MODERNA
+    // MENSAGEM DO WHATSAPP 100% LIMPA (SEM LINKS GIGANTES)
     const message = `Olá, ${tenant.name}! Gostaria de confirmar meu agendamento.\n\n` +
       `*Cliente:* ${name}\n` +
       `*Serviço:* ${selectedService.name}\n` +
+      `*Profissional:* ${selectedProfessional?.name ?? 'Não especificado'}\n` +
       `*Data:* ${date} de outubro às ${time}\n` +
-      `*Valor:* R$ ${servicePrice.toFixed(2)}${pixLine}\n\n` +
-      `📅 *Adicionar à Agenda (1 Clique):*\n` +
-      `🤖 Android/Web: ${shortGoogle}\n` +
-      `🍎 iPhone/Mac: ${shortApple}`;
+      `*Valor:* R$ ${servicePrice.toFixed(2)}${pixLine}`;
 
     window.open(`https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
     setStep(4);
@@ -712,156 +730,8 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
 
       <main className="mx-auto max-w-xl px-4 pt-6">
         {step < 4 && (
-          <div className="mb-6 flex justify-between border-b border-[#e2ddd3] pb-3 text-xs">
-            <span className={step === 1 ? 'font-bold text-[#805d4e]' : 'text-[#888]'}>1. Serviço</span>
-            <span className={step === 2 ? 'font-bold text-[#805d4e]' : 'text-[#888]'}>2. Data e Profissional</span>
-            <span className={step === 3 ? 'font-bold text-[#805d4e]' : 'text-[#888]'}>3. Pagamento e Dados</span>
-          </div>
-        )}
+          <div className="mb-6 flex justify-between border-b border
 
-        {step === 1 && (
-          <div className="space-y-3">
-            <h2 className="font-display text-lg font-bold">Escolha o serviço</h2>
-            {services.map((s) => (
-              <div
-                key={s.id}
-                onClick={() => { setSelectedService(s); setStep(2); }}
-                className="flex cursor-pointer items-center justify-between rounded-2xl border border-[#e2ddd3] bg-white p-4 transition-all hover:border-[#805d4e]"
-              >
-                <div>
-                  <p className="font-bold text-[#242329]">{s.name}</p>
-                  <p className="text-xs text-[#777]">{s.duration_minutes} min</p>
-                </div>
-                <p className="font-bold text-[#805d4e]">R$ {s.price.toFixed(2)}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-5">
-            <div>
-              <h3 className="mb-2 text-xs font-bold uppercase text-[#777]">Profissional</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {professionals.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setSelectedProfessional(p)}
-                    className={`rounded-xl border p-3 text-left text-xs ${selectedProfessional?.id === p.id ? 'border-[#805d4e] bg-[#805d4e] text-white' : 'border-[#e2ddd3] bg-white text-[#333]'}`}
-                  >
-                    <p className="font-bold">{p.name}</p>
-                    <p className="opacity-80">{p.role}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <h3 className="mb-2 text-xs font-bold uppercase text-[#777]">Data</h3>
-              <div className="grid grid-cols-3 gap-2">
-                {dates.map((d) => (
-                  <button
-                    key={d.date}
-                    type="button"
-                    onClick={() => setDate(d.date)}
-                    className={`rounded-xl border p-3 text-center text-xs ${date === d.date ? 'border-[#805d4e] bg-[#805d4e] text-white' : 'border-[#e2ddd3] bg-white text-[#333]'}`}
-                  >
-                    <p className="font-bold">{d.day}</p>
-                    <p className="opacity-80">{d.date} Out ({d.weekday})</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <h3 className="mb-2 text-xs font-bold uppercase text-[#777]">Horários Disponíveis</h3>
-              {times.length === 0 ? (
-                <p className="text-xs text-[#d94e70] p-2 bg-white rounded-xl border border-[#e2ddd3]">Nenhum horário disponível para este profissional nesta data.</p>
-              ) : (
-                <div className="grid grid-cols-4 gap-2">
-                  {times.map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setTime(t)}
-                      className={`rounded-xl border p-2 text-center text-xs ${time === t ? 'border-[#242329] bg-[#242329] text-white' : 'border-[#e2ddd3] bg-white text-[#333]'}`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => setStep(3)}
-              className="mt-4 w-full rounded-xl bg-[#805d4e] py-3 text-sm font-bold text-white shadow-md"
-            >
-              Avançar para confirmação →
-            </button>
-          </div>
-        )}
-
-        {step === 3 && (
-          <form onSubmit={submit} className="space-y-4">
-            <div className="rounded-2xl border border-[#e2ddd3] bg-white p-4 text-xs space-y-1">
-              <p className="font-bold text-sm text-[#242329]">{selectedService?.name}</p>
-              <p className="text-[#666]">Com {selectedProfessional?.name} em {date} de outubro às {time}</p>
-              <p className="font-bold text-[#805d4e] text-sm pt-1">R$ {servicePrice.toFixed(2)}</p>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-[#555]">
-                Forma de Pagamento
-                <select value={paymentMethod} onChange={(e: any) => setPaymentMethod(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e2ddd3] p-3 text-xs outline-none">
-                  <option value="local">Pagar no local</option>
-                  <option value="pix">Pagar agora via Pix</option>
-                </select>
-              </label>
-
-              {paymentMethod === 'pix' && (
-                <div className="rounded-xl border border-[#e2ddd3] bg-white p-3 text-xs space-y-2">
-                  <p className="font-bold">Chave Pix para pagamento:</p>
-                  <p className="bg-[#f4f1eb] p-2 rounded-lg font-mono text-center select-all">{pixKey || 'Chave não cadastrada'}</p>
-                  <button type="button" onClick={copyPix} className="w-full rounded-lg bg-[#242329] py-2 text-white font-semibold">
-                    {pixCopied ? 'Chave copiada! ✓' : 'Copiar chave Pix'}
-                  </button>
-                </div>
-              )}
-
-              <label className="block text-xs font-bold text-[#555]">
-                Seu Nome Completo
-                <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Digite seu nome" className="mt-1 w-full rounded-xl border border-[#e2ddd3] p-3 text-xs outline-none" />
-              </label>
-
-              <label className="block text-xs font-bold text-[#555]">
-                Seu WhatsApp
-                <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 99999-9999" className="mt-1 w-full rounded-xl border border-[#e2ddd3] p-3 text-xs outline-none" />
-              </label>
-            </div>
-
-            <button type="submit" className="w-full rounded-xl bg-[#2e7d32] py-3.5 text-sm font-bold text-white shadow-lg">
-              Confirmar pelo WhatsApp →
-            </button>
-          </form>
-        )}
-
-        {step === 4 && (
-          <div className="rounded-2xl border border-[#e2ddd3] bg-white p-6 text-center space-y-4">
-            <div className="text-4xl">🎉</div>
-            <h2 className="font-display text-xl font-bold text-[#242329]">Agendamento Solicitado!</h2>
-            <p className="text-xs text-[#666]">Você foi redirecionado para o WhatsApp da {tenant.name}.</p>
-            
-            <button onClick={() => setStep(1)} className="text-xs text-[#805d4e] underline font-semibold pt-4 block mx-auto">
-              Fazer novo agendamento
-            </button>
-          </div>
-        )}
-      </main>
-    </div>
-  );
-}
 function StepNumber({ number, active, label }: { number: number; active: boolean; label: string }) { return <div className="flex flex-col items-center gap-1.5"><span className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold ${active ? 'bg-[#242329] text-white' : 'bg-[#e2ddd4] text-[#989188]'}`}>{number}</span><span className={`text-[10px] font-semibold ${active ? 'text-[#4c4740]' : 'text-[#aaa39a]'}`}>{label}</span></div>; }
 
 function NotFoundView({ onBack }: { onBack: () => void }) {
