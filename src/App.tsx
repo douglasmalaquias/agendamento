@@ -414,7 +414,7 @@ function AdminView({ openPublicPage, notify }: { openPublicPage: (slug: string) 
   );
 }
 
-// --- PÁGINA PÚBLICA DE AGENDAMENTO (ÚNICA E UNIFICADA) ---
+// --- PÁGINA PÚBLICA DE AGENDAMENTO ---
 function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => void; notify: (msg: string) => void }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -463,7 +463,6 @@ function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => voi
     void loadTenantData();
   }, [slug]);
 
-  // Bloqueio de horários já salvos no Supabase
   useEffect(() => {
     if (!tenant || !selectedProfessional) return;
     const selectedDateObj = dates.find(d => d.date === date);
@@ -592,7 +591,7 @@ END:VCALENDAR`;
 
     const pixLine = paymentMethod === 'pix' && pixKey ? `\n*Pagamento:* Pix (chave: ${pixKey})` : '\n*Pagamento:* No local';
     
-    // MENSAGEM DO WHATSAPP TOTALMENTE LIMPA (SEM NENHUM LINK DE AGENDA)
+    // MENSAGEM DO WHATSAPP 100% LIMPA
     const message = `Olá, ${tenant.name}! Gostaria de confirmar meu agendamento.\n\n` +
       `*Cliente:* ${name}\n` +
       `*Serviço:* ${selectedService.name}\n` +
