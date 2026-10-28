@@ -652,41 +652,33 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
       if (error) notify('Não foi possível salvar agora, mas você ainda pode enviar a mensagem');
     }
 
-    // LÓGICA DOS LINKS CURTOS DE AGENDA PARA O ESTABELECIMENTO
+    // LÓGICA DO LINK UNIVERSAL (.ICS) DE 1 CLIQUE
     const [startH, startM] = time.split(':').map(Number);
     const duration = selectedService.duration_minutes || 45;
     const endMins = startH * 60 + startM + duration;
     const endH = Math.floor(endMins / 60);
     const endM = endMins % 60;
 
-    // Formato Google (Sem traços)
-    const gStart = `202610${date}T${String(startH).padStart(2, '0')}${String(startM).padStart(2, '0')}00`;
-    const gEnd = `202610${date}T${String(endH).padStart(2, '0')}${String(endM).padStart(2, '0')}00`;
-
-    // Formato Outlook e Apple (Com traços)
-    const isoStart = `2026-10-${date}T${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}:00`;
-    const isoEnd = `2026-10-${date}T${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`;
+    // Formato ISO exigido (com fuso horário de Brasília -03:00 para cair na hora exata)
+    const isoStart = `2026-10-${date}T${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}:00-03:00`;
+    const isoEnd = `2026-10-${date}T${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00-03:00`;
 
     const title = encodeURIComponent(`${selectedService.name} - ${name}`);
-
-    // Links enxutos (sem descrição e local para manter curto no WhatsApp)
-    const linkGoogle = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${gStart}/${gEnd}`;
-    const linkOutlook = `https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=${title}&startdt=${isoStart}&enddt=${isoEnd}`;
-    const linkApple = `https://ics.agical.io/?subject=${title}&dtstart=${isoStart}&dtend=${isoEnd}`;
+    const desc = encodeURIComponent(`Cliente: ${name} | Tel: ${phone} | Profissional: ${selectedProfessional?.name}`);
+    
+    // Link gerador de ICS Universal
+    const linkAgenda = `https://ics.agical.io/?subject=${title}&dtstart=${isoStart}&dtend=${isoEnd}&description=${desc}`;
 
     const pixLine = paymentMethod === 'pix' && pixKey ? `\n*Pagamento:* Pix (chave: ${pixKey})` : '\n*Pagamento:* No local';
     
-    // Mensagem Limpa para o WhatsApp com os 3 botões rápidos
+    // Mensagem Limpa com Link Único
     const message = `Olá, ${tenant.name}! Gostaria de confirmar meu agendamento.\n\n` +
       `*Cliente:* ${name}\n` +
       `*Serviço:* ${selectedService.name}\n` +
       `*Profissional:* ${selectedProfessional?.name ?? 'Não especificado'}\n` +
       `*Data:* ${date} de outubro às ${time}\n` +
       `*Valor:* R$ ${servicePrice.toFixed(2)}${pixLine}\n\n` +
-      `📅 *Adicionar à Agenda:*\n` +
-      `🤖 *Android:* ${linkGoogle}\n` +
-      `🍎 *iPhone:* ${linkApple}\n` +
-      `💻 *Outlook:* ${linkOutlook}`;
+      `📅 *Adicionar à Agenda (1 clique):*\n${linkAgenda}`;
 
     window.open(`https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
     setStep(4);
