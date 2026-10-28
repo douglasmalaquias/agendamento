@@ -592,7 +592,7 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
   
   const allTimes = ['09:00', '09:45', '10:30', '11:15', '13:30', '14:15', '15:00', '16:30'];
 
-  // Carrega do Supabase os horários ocupados para o profissional e data selecionados
+  // Carrega horários ocupados do Supabase
   useEffect(() => {
     if (!tenant || !selectedProfessional) return;
     const selectedDateObj = dates.find(d => d.date === date);
@@ -616,11 +616,9 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
     void loadOccupiedTimes();
   }, [tenant, selectedProfessional, date]);
 
-  // Filtra removendo os horários já agendados
   const times = allTimes.filter(t => !bookedAppointments.includes(t));
 
   const pixKey = selectedProfessional?.pix_key || tenant.pix_key || '';
-  const pixKeyTypeLabel: Record<string, string> = { telefone: 'Telefone', email: 'E-mail', cpf: 'CPF', aleatoria: 'Chave aleatória' };
   const servicePrice = selectedService?.price ?? 0;
 
   const copyPix = () => {
@@ -630,19 +628,65 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
     window.setTimeout(() => setPixCopied(false), 2200);
   };
 
-  // Função para criar o link do Google Calendar
+  // Gerador de Link Direto para o Google Agenda (Android e Web)
   const getGoogleCalendarUrl = () => {
     if (!selectedService) return '';
     const selectedDateObj = dates.find(d => d.date === date);
     const dateStr = selectedDateObj ? selectedDateObj.fullDate.replace(/-/g, '') : `202610${date}`;
-    const timeStr = time.replace(':', '') + '00';
-    const startIso = `${dateStr}T${timeStr}`;
+    
+    // Calcula horário inicial e final (duração do serviço)
+    const [startH, startM] = time.split(':').map(Number);
+    const duration = selectedService.duration_minutes || 45;
+    const endMins = startH * 60 + startM + duration;
+    const endH = Math.floor(endMins / 60);
+    const endM = endMins % 60;
+
+    const startIso = `${dateStr}T${String(startH).padStart(2, '0')}${String(startM).padStart(2, '0')}00`;
+    const endIso = `${dateStr}T${String(endH).padStart(2, '0')}${String(endM).padStart(2, '0')}00`;
 
     const title = encodeURIComponent(`${selectedService.name} - ${tenant.name}`);
     const details = encodeURIComponent(`Profissional: ${selectedProfessional?.name}\nCliente: ${name}\nTel: ${phone}`);
     const location = encodeURIComponent(tenant.city || 'São Paulo, SP');
 
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startIso}/${startIso}&details=${details}&location=${location}`;
+    return `https://calendar.google.com/calendar/event?action=TEMPLATE&text=${title}&dates=${startIso}/${endIso}&details=${details}&location=${location}`;
+  };
+
+  // Gerador e Baixador de arquivo .ics NATIVO para iPhone (Apple Calendar) / Outlook / Android
+  const downloadIcsFile = () => {
+    if (!selectedService) return;
+    const selectedDateObj = dates.find(d => d.date === date);
+    const dateStr = selectedDateObj ? selectedDateObj.fullDate.replace(/-/g, '') : `202610${date}`;
+    
+    const [startH, startM] = time.split(':').map(Number);
+    const duration = selectedService.duration_minutes || 45;
+    const endMins = startH * 60 + startM + duration;
+    const endH = Math.floor(endMins / 60);
+    const endM = endMins % 60;
+
+    const startIso = `${dateStr}T${String(startH).padStart(2, '0')}${String(startM).padStart(2, '0')}00`;
+    const endIso = `${dateStr}T${String(endH).padStart(2, '0')}${String(endM).padStart(2, '0')}00`;
+
+    const icsContent = 
+`BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Marco Agendamentos//PT
+BEGIN:VEVENT
+SUMMARY:${selectedService.name} - ${tenant.name}
+DESCRIPTION:Profissional: ${selectedProfessional?.name}\\nCliente: ${name}\\nContato: ${phone}
+LOCATION:${tenant.city || 'São Paulo, SP'}
+DTSTART:${startIso}
+DTEND:${endIso}
+END:VEVENT
+END:VCALENDAR`;
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agendamento-${tenant.slug}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const submit = async (event: FormEvent) => {
@@ -669,17 +713,15 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
       if (error) notify('Não foi possível salvar agora, mas você ainda pode enviar a mensagem');
     }
 
-    const calendarUrl = getGoogleCalendarUrl();
-    const paymentLabel = paymentMethod === 'pix' ? 'Pagamento online via Pix' : 'Pagamento no local';
     const pixLine = paymentMethod === 'pix' && pixKey ? `\n*Pagamento:* Pix (chave: ${pixKey})` : '\n*Pagamento:* No local';
     
+    // Mensagem Limpa para o WhatsApp (sem poluição de links gigantes)
     const message = `Olá, ${tenant.name}! Gostaria de confirmar meu agendamento.\n\n` +
       `*Cliente:* ${name}\n` +
       `*Serviço:* ${selectedService.name}\n` +
       `*Profissional:* ${selectedProfessional?.name ?? 'Não especificado'}\n` +
       `*Data:* ${date} de outubro às ${time}\n` +
-      `*Valor:* R$ ${servicePrice.toFixed(2)}${pixLine}\n\n` +
-      `🗓️ *Adicionar ao Calendário:* ${calendarUrl}`;
+      `*Valor:* R$ ${servicePrice.toFixed(2)}${pixLine}`;
 
     window.open(`https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
     setStep(4);
@@ -834,18 +876,32 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
           <div className="rounded-2xl border border-[#e2ddd3] bg-white p-6 text-center space-y-4">
             <div className="text-4xl">🎉</div>
             <h2 className="font-display text-xl font-bold text-[#242329]">Agendamento Solicitado!</h2>
-            <p className="text-xs text-[#666]">Você foi redirecionado para o WhatsApp da {tenant.name} para concluir a confirmação.</p>
+            <p className="text-xs text-[#666]">Você foi redirecionado para o WhatsApp da {tenant.name}.</p>
             
-            <a
-              href={getGoogleCalendarUrl()}
-              target="_blank"
-              rel="noreferrer"
-              className="block w-full rounded-xl border border-[#e2ddd3] bg-[#f8f6f1] py-3 text-xs font-bold text-[#242329] hover:bg-[#e2ddd3]"
-            >
-              📅 Adicionar evento ao Google Calendar
-            </a>
+            <div className="pt-2 space-y-2">
+              <p className="text-xs font-bold text-[#444]">Adicionar à sua agenda:</p>
+              
+              {/* Botão NATIVO para iPhone (Abre direto o Calendário Apple) */}
+              <button
+                type="button"
+                onClick={downloadIcsFile}
+                className="w-full rounded-xl bg-[#007aff] py-3 text-xs font-bold text-white shadow-sm hover:opacity-90 flex items-center justify-center gap-2"
+              >
+                 Adicionar ao iPhone / Apple Calendar (.ics)
+              </button>
 
-            <button onClick={() => setStep(1)} className="text-xs text-[#805d4e] underline font-semibold">
+              {/* Botão NATIVO para Android / Google Agenda */}
+              <a
+                href={getGoogleCalendarUrl()}
+                target="_blank"
+                rel="noreferrer"
+                className="block w-full rounded-xl bg-[#4285f4] py-3 text-xs font-bold text-white shadow-sm hover:opacity-90 flex items-center justify-center gap-2"
+              >
+                🤖 Adicionar ao Google Agenda (Android / Web)
+              </a>
+            </div>
+
+            <button onClick={() => setStep(1)} className="text-xs text-[#805d4e] underline font-semibold pt-2 block mx-auto">
               Fazer novo agendamento
             </button>
           </div>
