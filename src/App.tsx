@@ -1,5 +1,5 @@
 import React, { useState, useEffect, FormEvent } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, User } from '@supabase/supabase-js';
 import { 
   Store, 
   WalletCards, 
@@ -15,7 +15,11 @@ import {
   Users,
   CheckCircle2,
   ExternalLink,
-  Palette
+  Palette,
+  LogOut,
+  Lock,
+  Mail,
+  KeyRound
 } from 'lucide-react';
 
 // --- CONFIGURAÇÃO DO SUPABASE ---
@@ -25,6 +29,9 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 export const supabase = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
+
+// DEFINA AQUI O SEU E-MAIL DE SUPER ADMIN
+const SUPER_ADMIN_EMAIL = 'admin@marco.com';
 
 // --- PALETA DE CORES (TEMAS) ---
 const THEME_STYLES: Record<string, { bg: string; cardBg: string; textPrimary: string; accent: string; buttonBg: string; name: string }> = {
@@ -44,6 +51,7 @@ interface Tenant {
   whatsapp: string;
   city?: string;
   theme?: string;
+  owner_email?: string;
   pix_key?: string;
   pix_key_type?: string;
 }
@@ -95,27 +103,74 @@ const fallbackTenant: Tenant = {
   pix_key_type: 'telefone'
 };
 
-type View = 'super-admin' | 'tenant-admin' | 'public';
+type View = 'super-admin' | 'tenant-admin' | 'public' | 'login';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<View>('super-admin');
+  const [currentView, setCurrentView] = useState<View>('login');
   const [currentSlug, setCurrentSlug] = useState<string>('');
   const [activeTenant, setActiveTenant] = useState<Tenant | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  const notify = (msg: string) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(null), 3000);
+  };
 
   useEffect(() => {
     const path = window.location.pathname.replace(/^\//, '');
     if (path) {
       setCurrentSlug(path);
       setCurrentView('public');
-    } else {
-      setCurrentView('super-admin');
+      setAuthLoading(false);
+      return;
     }
+
+    const checkAuth = async () => {
+      const client = supabase;
+      if (client) {
+        const { data: { session } } = await client.auth.getSession();
+        if (session?.user) {
+          setUser(session.user);
+          await routeUserByEmail(session.user.email ?? '');
+        } else {
+          setCurrentView('login');
+        }
+      } else {
+        setCurrentView('login');
+      }
+      setAuthLoading(false);
+    };
+
+    void checkAuth();
   }, []);
 
-  const notify = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(null), 3000);
+  const routeUserByEmail = async (email: string) => {
+    if (email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+      setCurrentView('super-admin');
+      return;
+    }
+
+    const client = supabase;
+    if (client) {
+      const { data } = await client.from('marco_tenants').select('*').eq('owner_email', email).single();
+      if (data) {
+        setActiveTenant(data as Tenant);
+        setCurrentView('tenant-admin');
+      } else {
+        notify('Nenhum estabelecimento associado a este e-mail');
+        setCurrentView('login');
+      }
+    }
+  };
+
+  const handleLogout = async () => {
+    const client = supabase;
+    if (client) await client.auth.signOut();
+    setUser(null);
+    setActiveTenant(null);
+    setCurrentView('login');
   };
 
   const openPublicPage = (slug: string) => {
@@ -131,16 +186,28 @@ export default function App() {
 
   const backToSuperAdmin = () => {
     window.history.pushState({}, '', '/');
-    setActiveTenant(null);
-    setCurrentView('super-admin');
+    if (user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+      setActiveTenant(null);
+      setCurrentView('super-admin');
+    } else {
+      setCurrentView('login');
+    }
   };
+
+  if (authLoading) {
+    return <div className="flex h-screen items-center justify-center text-sm text-[#666]">Carregando sistema...</div>;
+  }
 
   if (currentView === 'public') {
     return <BookingPage slug={currentSlug} onBack={backToSuperAdmin} notify={notify} />;
   }
 
+  if (currentView === 'login') {
+    return <LoginPage onLoginSuccess={routeUserByEmail} notify={notify} />;
+  }
+
   if (currentView === 'tenant-admin' && activeTenant) {
-    return <TenantAdminView tenant={activeTenant} onBack={backToSuperAdmin} notify={notify} openPublicPage={openPublicPage} />;
+    return <TenantAdminView tenant={activeTenant} onBack={backToSuperAdmin} onLogout={handleLogout} notify={notify} openPublicPage={openPublicPage} isSuperAdmin={user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()} />;
   }
 
   return (
@@ -150,13 +217,97 @@ export default function App() {
           {notification}
         </div>
       )}
-      <SuperAdminView openPublicPage={openPublicPage} openTenantDashboard={openTenantDashboard} notify={notify} />
+      <SuperAdminView openPublicPage={openPublicPage} openTenantDashboard={openTenantDashboard} onLogout={handleLogout} notify={notify} userEmail={user?.email} />
     </div>
   );
 }
 
-// --- VISÃO 1: SUPER ADMIN (MODAL OTIMIZADA PARA TELEMÓVEL) ---
-function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openPublicPage: (slug: string) => void; openTenantDashboard: (tenant: Tenant) => void; notify: (msg: string) => void }) {
+// --- TELA DE LOGIN ---
+function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string) => Promise<void>; notify: (msg: string) => void }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const client = supabase;
+    if (!client) {
+      if (email === SUPER_ADMIN_EMAIL) {
+        await onLoginSuccess(email);
+      } else {
+        notify('Supabase não conectado.');
+      }
+      setLoading(false);
+      return;
+    }
+
+    const { data, error } = await client.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      notify('E-mail ou senha incorretos');
+    } else if (data.user) {
+      await onLoginSuccess(data.user.email ?? '');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] p-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl border border-[#e9ecef]">
+        <div className="text-center mb-6">
+          <div className="mx-auto h-12 w-12 rounded-2xl bg-[#242329] flex items-center justify-center text-white font-bold text-2xl mb-3">M</div>
+          <h1 className="font-display text-2xl font-bold">Marcô.</h1>
+          <p className="text-xs text-[#6c757d] mt-1">Acesse o seu painel administrativo</p>
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#495057] mb-1">E-mail</label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-3 text-[#adb5bd]" size={16} />
+              <input
+                required
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="seuemail@comercio.com"
+                className="w-full rounded-xl border border-[#e9ecef] py-2.5 pl-10 pr-4 text-xs outline-none focus:border-[#242329]"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#495057] mb-1">Senha</label>
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-3 text-[#adb5bd]" size={16} />
+              <input
+                required
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full rounded-xl border border-[#e9ecef] py-2.5 pl-10 pr-4 text-xs outline-none focus:border-[#242329]"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-xl bg-[#242329] py-3 text-xs font-bold text-white shadow-md hover:bg-[#343a40] disabled:opacity-50"
+          >
+            {loading ? 'Entrando...' : 'Entrar no Painel'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// --- VISÃO 1: SUPER ADMIN (GERENCIAMENTO DE SENHAS) ---
+function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify, userEmail }: { openPublicPage: (slug: string) => void; openTenantDashboard: (tenant: Tenant) => void; onLogout: () => void; notify: (msg: string) => void; userEmail?: string }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -169,6 +320,8 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
   const [formWhatsapp, setFormWhatsapp] = useState('');
   const [formCity, setFormCity] = useState('São Paulo, SP');
   const [formTheme, setFormTheme] = useState('coffee');
+  const [formOwnerEmail, setFormOwnerEmail] = useState('');
+  const [formPassword, setFormPassword] = useState('');
 
   const loadAdminData = async () => {
     setLoading(true);
@@ -192,6 +345,8 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
     setFormWhatsapp('');
     setFormCity('São Paulo, SP');
     setFormTheme('coffee');
+    setFormOwnerEmail('');
+    setFormPassword('');
     setShowModal(true);
   };
 
@@ -203,6 +358,8 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
     setFormWhatsapp(t.whatsapp);
     setFormCity(t.city || 'São Paulo, SP');
     setFormTheme(t.theme || 'coffee');
+    setFormOwnerEmail(t.owner_email || '');
+    setFormPassword('');
     setShowModal(true);
   };
 
@@ -220,7 +377,8 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
       category: formCategory,
       whatsapp: formWhatsapp.replace(/\D/g, ''),
       city: formCity,
-      theme: formTheme
+      theme: formTheme,
+      owner_email: formOwnerEmail.trim().toLowerCase()
     };
 
     if (editingTenant) {
@@ -230,7 +388,20 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
       const { data, error } = await client.from('marco_tenants').insert(payload).select().single();
       if (!error && data) {
         await client.from('marco_subscriptions').insert({ tenant_id: data.id, status: 'paid' });
-        notify('Novo comércio cadastrado com sucesso!');
+        notify('Novo comércio cadastrado!');
+      }
+    }
+
+    // Atualizar/Gerar Senha se preenchida
+    if (formOwnerEmail && formPassword) {
+      const { error: pwdError } = await client.rpc('admin_set_user_password', {
+        user_email: formOwnerEmail.trim().toLowerCase(),
+        new_password: formPassword
+      });
+      if (pwdError) {
+        notify('Aviso: Comércio salvo, mas erro ao definir senha. Execute o SQL de suporte.');
+      } else {
+        notify('E-mail e Senha de acesso configurados!');
       }
     }
 
@@ -243,7 +414,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
     const client = supabase;
     if (client) {
       await client.from('marco_tenants').delete().eq('id', id);
-      notify('Comércio excluído com sucesso!');
+      notify('Comércio excluído!');
       void loadAdminData();
     }
   };
@@ -265,14 +436,20 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
           <button className="flex w-full items-center gap-3 rounded-xl bg-[#242329] px-4 py-3 text-sm font-semibold text-white">
             <Store size={18} /> Todos os Comércios
           </button>
+          <button onClick={onLogout} className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-[#d94e70] hover:bg-[#fde8ed]">
+            <LogOut size={18} /> Sair
+          </button>
         </nav>
       </aside>
 
       <main className="flex-1 p-4 md:p-10">
         <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="font-display text-2xl md:text-3xl font-bold">Super Admin</h1>
-            <p className="text-xs md:text-sm text-[#6c757d]">Gerencie os estabelecimentos da plataforma Marcô.</p>
+            <div className="flex items-center gap-2">
+              <h1 className="font-display text-2xl md:text-3xl font-bold">Super Admin</h1>
+              <button onClick={onLogout} className="md:hidden text-[#d94e70] p-2"><LogOut size={18} /></button>
+            </div>
+            <p className="text-xs md:text-sm text-[#6c757d]">Sessão iniciada como: {userEmail}</p>
           </div>
           <button
             onClick={handleOpenCreateModal}
@@ -284,17 +461,11 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
 
         <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
           <div className="rounded-2xl border border-[#e9ecef] bg-white p-4 md:p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[#6c757d]">Comércios</span>
-              <Store size={16} className="text-[#6c757d]" />
-            </div>
+            <span className="text-xs font-semibold text-[#6c757d]">Comércios</span>
             <p className="mt-1 md:mt-2 text-xl md:text-2xl font-bold">{tenants.length}</p>
           </div>
           <div className="rounded-2xl border border-[#e9ecef] bg-white p-4 md:p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[#6c757d]">Mensalidades</span>
-              <CheckCircle2 size={16} className="text-[#2e7d32]" />
-            </div>
+            <span className="text-xs font-semibold text-[#6c757d]">Mensalidades</span>
             <p className="mt-1 md:mt-2 text-xl md:text-2xl font-bold text-[#2e7d32]">100%</p>
           </div>
         </div>
@@ -319,7 +490,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
             <p className="py-8 text-center text-sm text-[#6c757d]">Nenhum comércio encontrado.</p>
           ) : (
             <>
-              {/* VISTA EM CARDS NO TELEMÓVEL */}
+              {/* CARDS MÓVEIS */}
               <div className="grid grid-cols-1 gap-3 md:hidden">
                 {filteredTenants.map((t) => (
                   <div key={t.id} className="rounded-xl border border-[#e9ecef] p-4 bg-white space-y-3">
@@ -327,35 +498,24 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
                       <div>
                         <h3 className="font-bold text-base text-[#212529]">{t.name}</h3>
                         <span className="text-xs text-[#6c757d]">{t.category} · {t.city || 'São Paulo, SP'}</span>
+                        {t.owner_email && <p className="text-[10px] text-[#805d4e]">✉ {t.owner_email}</p>}
                       </div>
                       <span className="text-xs bg-[#f8f9fa] border border-[#e9ecef] px-2 py-1 rounded-md font-mono">{t.whatsapp}</span>
                     </div>
 
                     <div className="flex items-center justify-between pt-2 border-t border-[#f8f9fa]">
-                      <button
-                        onClick={() => openPublicPage(t.slug)}
-                        className="flex items-center gap-1 text-xs font-bold text-[#805d4e]"
-                      >
+                      <button onClick={() => openPublicPage(t.slug)} className="flex items-center gap-1 text-xs font-bold text-[#805d4e]">
                         <Link2 size={14} /> /{t.slug}
                       </button>
 
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => openTenantDashboard(t)}
-                          className="rounded-lg bg-[#242329] px-3 py-1.5 text-xs font-bold text-white"
-                        >
+                        <button onClick={() => openTenantDashboard(t)} className="rounded-lg bg-[#242329] px-3 py-1.5 text-xs font-bold text-white">
                           Entrar
                         </button>
-                        <button
-                          onClick={() => handleOpenEditModal(t)}
-                          className="rounded-lg p-1.5 text-[#6c757d] bg-[#f8f9fa]"
-                        >
+                        <button onClick={() => handleOpenEditModal(t)} className="rounded-lg p-1.5 text-[#6c757d] bg-[#f8f9fa]">
                           <Pencil size={15} />
                         </button>
-                        <button
-                          onClick={() => handleDeleteTenant(t.id, t.name)}
-                          className="rounded-lg p-1.5 text-[#d94e70] bg-[#fde8ed]"
-                        >
+                        <button onClick={() => handleDeleteTenant(t.id, t.name)} className="rounded-lg p-1.5 text-[#d94e70] bg-[#fde8ed]">
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -364,13 +524,13 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
                 ))}
               </div>
 
-              {/* VISTA EM TABELA NO COMPUTADOR */}
+              {/* TABELA DESKTOP */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-[#e9ecef] text-xs font-semibold text-[#6c757d]">
                       <th className="pb-3">COMÉRCIO</th>
-                      <th className="pb-3">CIDADE / BAIRRO</th>
+                      <th className="pb-3">E-MAIL DO PROPRIETÁRIO</th>
                       <th className="pb-3">WHATSAPP</th>
                       <th className="pb-3">LINK PÚBLICO</th>
                       <th className="pb-3 text-right">AÇÕES</th>
@@ -385,36 +545,22 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
                             <span className="text-xs font-normal text-[#6c757d]">{t.category}</span>
                           </button>
                         </td>
-                        <td className="py-4 text-[#495057]">{t.city || 'São Paulo, SP'}</td>
+                        <td className="py-4 text-[#495057] text-xs font-mono">{t.owner_email || 'Não definido'}</td>
                         <td className="py-4 text-[#495057]">{t.whatsapp}</td>
                         <td className="py-4">
-                          <button
-                            onClick={() => openPublicPage(t.slug)}
-                            className="flex items-center gap-1 text-xs font-semibold text-[#805d4e] hover:underline"
-                          >
+                          <button onClick={() => openPublicPage(t.slug)} className="flex items-center gap-1 text-xs font-semibold text-[#805d4e] hover:underline">
                             <Link2 size={14} /> /{t.slug}
                           </button>
                         </td>
                         <td className="py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => openTenantDashboard(t)}
-                              className="rounded-lg bg-[#f8f9fa] border border-[#e9ecef] px-2.5 py-1 text-xs font-semibold text-[#212529] hover:bg-[#e9ecef]"
-                            >
+                            <button onClick={() => openTenantDashboard(t)} className="rounded-lg bg-[#f8f9fa] border border-[#e9ecef] px-2.5 py-1 text-xs font-semibold text-[#212529] hover:bg-[#e9ecef]">
                               Entrar
                             </button>
-                            <button
-                              onClick={() => handleOpenEditModal(t)}
-                              className="rounded-lg p-2 text-[#6c757d] hover:bg-[#e9ecef] hover:text-[#212529]"
-                              title="Editar"
-                            >
+                            <button onClick={() => handleOpenEditModal(t)} className="rounded-lg p-2 text-[#6c757d] hover:bg-[#e9ecef]" title="Editar / Resetar Senha">
                               <Pencil size={16} />
                             </button>
-                            <button
-                              onClick={() => handleDeleteTenant(t.id, t.name)}
-                              className="rounded-lg p-2 text-[#d94e70] hover:bg-[#fde8ed]"
-                              title="Excluir"
-                            >
+                            <button onClick={() => handleDeleteTenant(t.id, t.name)} className="rounded-lg p-2 text-[#d94e70] hover:bg-[#fde8ed]" title="Excluir">
                               <Trash2 size={16} />
                             </button>
                           </div>
@@ -429,54 +575,43 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
         </div>
       </main>
 
-      {/* MODAL RESPONSIVA COM SELEÇÃO DE CORES EM DESTAQUE */}
+      {/* MODAL COM CAMPO DE E-MAIL E SENHA */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 overflow-y-auto">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl my-auto">
             <div className="mb-3 flex items-center justify-between border-b pb-2">
-              <h2 className="font-display text-base font-bold">
-                {editingTenant ? 'Editar Comércio' : 'Novo Comércio'}
-              </h2>
-              <button onClick={() => setShowModal(false)} className="text-[#6c757d]">
-                <X size={20} />
-              </button>
+              <h2 className="font-display text-base font-bold">{editingTenant ? 'Editar Comércio' : 'Novo Comércio'}</h2>
+              <button onClick={() => setShowModal(false)} className="text-[#6c757d]"><X size={20} /></button>
             </div>
             
             <form onSubmit={handleSaveTenant} className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-[#495057]">Nome do Estabelecimento</label>
-                <input
-                  required
-                  type="text"
-                  value={formName}
-                  onChange={(e) => {
-                    setFormName(e.target.value);
-                    if (!editingTenant) setFormSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'));
-                  }}
-                  placeholder="Ex: Studio Elena Nails"
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none"
-                />
+                <input required type="text" value={formName} onChange={(e) => { setFormName(e.target.value); if (!editingTenant) setFormSlug(e.target.value.toLowerCase().replace(/\s+/g, '-')); }} placeholder="Ex: Studio Elena Nails" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none" />
+              </div>
+
+              <div className="bg-[#f8f9fa] p-3 rounded-xl border border-[#e9ecef] space-y-2">
+                <p className="font-bold text-[#212529] flex items-center gap-1"><KeyRound size={14} /> Credenciais de Acesso do Cliente</p>
+                <div>
+                  <label className="block font-semibold text-[#495057]">E-mail de Acesso</label>
+                  <input required type="email" value={formOwnerEmail} onChange={(e) => setFormOwnerEmail(e.target.value)} placeholder="proprietario@comercio.com" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none bg-white" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#495057]">
+                    {editingTenant ? 'Nova Senha (deixe em branco se não quiser alterar)' : 'Definir Senha Inicial'}
+                  </label>
+                  <input type="password" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} placeholder="••••••••" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none bg-white" />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-semibold text-[#495057]">Link (Slug)</label>
-                  <input
-                    required
-                    type="text"
-                    value={formSlug}
-                    onChange={(e) => setFormSlug(e.target.value)}
-                    placeholder="studio-elena"
-                    className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none"
-                  />
+                  <input required type="text" value={formSlug} onChange={(e) => setFormSlug(e.target.value)} placeholder="studio-elena" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none" />
                 </div>
                 <div>
                   <label className="block font-semibold text-[#495057]">Categoria</label>
-                  <select
-                    value={formCategory}
-                    onChange={(e) => setFormCategory(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none"
-                  >
+                  <select value={formCategory} onChange={(e) => setFormCategory(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none">
                     <option value="Barbearia">Barbearia</option>
                     <option value="Esmalteria / Nails">Esmalteria / Nails</option>
                     <option value="Estética">Estética</option>
@@ -485,44 +620,24 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
                 </div>
               </div>
 
-              {/* PAINEL DE SELEÇÃO DE CORES DA PÁGINA */}
               <div className="bg-[#f8f9fa] p-3 rounded-xl border border-[#e9ecef]">
                 <label className="block font-bold text-[#212529] mb-2 flex items-center gap-1">
                   <Palette size={14} className="text-[#805d4e]" /> Cor da Página do Cliente
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setFormTheme('coffee')}
-                    className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'coffee' ? 'border-2 border-[#242329] bg-white shadow-sm' : 'border-[#e9ecef] bg-[#f4f1eb]'}`}
-                  >
+                  <button type="button" onClick={() => setFormTheme('coffee')} className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'coffee' ? 'border-2 border-[#242329] bg-white shadow-sm' : 'border-[#e9ecef] bg-[#f4f1eb]'}`}>
                     <span>🟤 Café</span>
                     {formTheme === 'coffee' && <CheckCircle2 size={14} className="text-[#242329]" />}
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setFormTheme('dark')}
-                    className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'dark' ? 'border-2 border-[#242329] bg-[#27272a] text-white shadow-sm' : 'border-[#e9ecef] bg-[#18181b] text-white'}`}
-                  >
+                  <button type="button" onClick={() => setFormTheme('dark')} className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'dark' ? 'border-2 border-[#242329] bg-[#27272a] text-white shadow-sm' : 'border-[#e9ecef] bg-[#18181b] text-white'}`}>
                     <span>⬛ Dark</span>
                     {formTheme === 'dark' && <CheckCircle2 size={14} className="text-white" />}
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setFormTheme('blue')}
-                    className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'blue' ? 'border-2 border-[#242329] bg-white shadow-sm' : 'border-[#e9ecef] bg-[#f0f4f8]'}`}
-                  >
+                  <button type="button" onClick={() => setFormTheme('blue')} className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'blue' ? 'border-2 border-[#242329] bg-white shadow-sm' : 'border-[#e9ecef] bg-[#f0f4f8]'}`}>
                     <span>🔵 Azul</span>
                     {formTheme === 'blue' && <CheckCircle2 size={14} className="text-[#242329]" />}
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setFormTheme('emerald')}
-                    className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'emerald' ? 'border-2 border-[#242329] bg-white shadow-sm' : 'border-[#e9ecef] bg-[#f0fdf4]'}`}
-                  >
+                  <button type="button" onClick={() => setFormTheme('emerald')} className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'emerald' ? 'border-2 border-[#242329] bg-white shadow-sm' : 'border-[#e9ecef] bg-[#f0fdf4]'}`}>
                     <span>🟢 Verde</span>
                     {formTheme === 'emerald' && <CheckCircle2 size={14} className="text-[#242329]" />}
                   </button>
@@ -531,31 +646,15 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
 
               <div>
                 <label className="block font-semibold text-[#495057]">WhatsApp (Com DDD)</label>
-                <input
-                  required
-                  type="text"
-                  value={formWhatsapp}
-                  onChange={(e) => setFormWhatsapp(e.target.value)}
-                  placeholder="11999999999"
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none"
-                />
+                <input required type="text" value={formWhatsapp} onChange={(e) => setFormWhatsapp(e.target.value)} placeholder="11999999999" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none" />
               </div>
 
               <div>
                 <label className="block font-semibold text-[#495057]">Bairro e Cidade</label>
-                <input
-                  type="text"
-                  value={formCity}
-                  onChange={(e) => setFormCity(e.target.value)}
-                  placeholder="São Paulo, SP - Jardins"
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none"
-                />
+                <input type="text" value={formCity} onChange={(e) => setFormCity(e.target.value)} placeholder="São Paulo, SP - Jardins" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none" />
               </div>
 
-              <button
-                type="submit"
-                className="mt-4 w-full rounded-xl bg-[#242329] py-3 text-xs font-bold text-white shadow-md hover:bg-[#343a40]"
-              >
+              <button type="submit" className="mt-4 w-full rounded-xl bg-[#242329] py-3 text-xs font-bold text-white shadow-md hover:bg-[#343a40]">
                 {editingTenant ? 'Salvar Alterações' : 'Cadastrar Comércio'}
               </button>
             </form>
@@ -567,7 +666,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
 }
 
 // --- VISÃO 2: DASHBOARD DO ESTABELECIMENTO ---
-function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: Tenant; onBack: () => void; notify: (msg: string) => void; openPublicPage: (slug: string) => void }) {
+function TenantAdminView({ tenant, onBack, onLogout, notify, openPublicPage, isSuperAdmin }: { tenant: Tenant; onBack: () => void; onLogout: () => void; notify: (msg: string) => void; openPublicPage: (slug: string) => void; isSuperAdmin: boolean }) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'professionals' | 'appointments'>('dashboard');
   const [services, setServices] = useState<Service[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -618,8 +717,6 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
       setShowServiceModal(false);
       setServiceName('');
       void loadTenantDetails();
-    } else {
-      notify('Erro ao cadastrar serviço: ' + error.message);
     }
   };
 
@@ -642,8 +739,6 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
       setProfName('');
       setProfPix('');
       void loadTenantDetails();
-    } else {
-      notify('Erro ao cadastrar profissional: ' + error.message);
     }
   };
 
@@ -670,70 +765,48 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8f9fa]">
       <aside className="w-64 border-r border-[#e9ecef] bg-white p-6 hidden md:block">
-        <button onClick={onBack} className="mb-6 flex items-center gap-2 text-xs font-semibold text-[#6c757d] hover:text-[#212529]">
-          <ArrowLeft size={16} /> Voltar ao Super Admin
-        </button>
+        {isSuperAdmin && (
+          <button onClick={onBack} className="mb-6 flex items-center gap-2 text-xs font-semibold text-[#6c757d] hover:text-[#212529]">
+            <ArrowLeft size={16} /> Voltar ao Super Admin
+          </button>
+        )}
         <div className="mb-6">
           <h2 className="font-display text-lg font-bold text-[#212529]">{tenant.name}</h2>
           <span className="text-xs text-[#6c757d]">{tenant.category} · {tenant.city}</span>
         </div>
         <nav className="space-y-1">
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === 'dashboard' ? 'bg-[#242329] text-white' : 'text-[#495057] hover:bg-[#f8f9fa]'}`}
-          >
+          <button onClick={() => setActiveTab('dashboard')} className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === 'dashboard' ? 'bg-[#242329] text-white' : 'text-[#495057] hover:bg-[#f8f9fa]'}`}>
             <BarChart3 size={18} /> Visão Geral
           </button>
-          <button
-            onClick={() => setActiveTab('appointments')}
-            className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === 'appointments' ? 'bg-[#242329] text-white' : 'text-[#495057] hover:bg-[#f8f9fa]'}`}
-          >
+          <button onClick={() => setActiveTab('appointments')} className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === 'appointments' ? 'bg-[#242329] text-white' : 'text-[#495057] hover:bg-[#f8f9fa]'}`}>
             <CalendarDays size={18} /> Agendamentos
           </button>
-          <button
-            onClick={() => setActiveTab('services')}
-            className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === 'services' ? 'bg-[#242329] text-white' : 'text-[#495057] hover:bg-[#f8f9fa]'}`}
-          >
+          <button onClick={() => setActiveTab('services')} className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === 'services' ? 'bg-[#242329] text-white' : 'text-[#495057] hover:bg-[#f8f9fa]'}`}>
             <WalletCards size={18} /> Serviços
           </button>
-          <button
-            onClick={() => setActiveTab('professionals')}
-            className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === 'professionals' ? 'bg-[#242329] text-white' : 'text-[#495057] hover:bg-[#f8f9fa]'}`}
-          >
+          <button onClick={() => setActiveTab('professionals')} className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === 'professionals' ? 'bg-[#242329] text-white' : 'text-[#495057] hover:bg-[#f8f9fa]'}`}>
             <Users size={18} /> Profissionais
+          </button>
+          <button onClick={onLogout} className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-[#d94e70] hover:bg-[#fde8ed] mt-6">
+            <LogOut size={18} /> Sair
           </button>
         </nav>
       </aside>
 
       <div className="md:hidden border-b border-[#e9ecef] bg-white p-4 space-y-3">
-        <button onClick={onBack} className="flex items-center gap-1 text-xs font-semibold text-[#6c757d]">
-          <ArrowLeft size={14} /> Voltar ao Super Admin
-        </button>
+        <div className="flex items-center justify-between">
+          {isSuperAdmin ? (
+            <button onClick={onBack} className="flex items-center gap-1 text-xs font-semibold text-[#6c757d]">
+              <ArrowLeft size={14} /> Voltar ao Super Admin
+            </button>
+          ) : <span className="font-bold text-sm">{tenant.name}</span>}
+          <button onClick={onLogout} className="text-xs font-bold text-[#d94e70] flex items-center gap-1"><LogOut size={14} /> Sair</button>
+        </div>
         <div className="grid grid-cols-4 gap-1 bg-[#f8f9fa] p-1 rounded-xl text-xs font-bold text-center">
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`py-2 rounded-lg ${activeTab === 'dashboard' ? 'bg-[#242329] text-white' : 'text-[#666]'}`}
-          >
-            Geral
-          </button>
-          <button
-            onClick={() => setActiveTab('appointments')}
-            className={`py-2 rounded-lg ${activeTab === 'appointments' ? 'bg-[#242329] text-white' : 'text-[#666]'}`}
-          >
-            Agenda
-          </button>
-          <button
-            onClick={() => setActiveTab('services')}
-            className={`py-2 rounded-lg ${activeTab === 'services' ? 'bg-[#242329] text-white' : 'text-[#666]'}`}
-          >
-            Serviços
-          </button>
-          <button
-            onClick={() => setActiveTab('professionals')}
-            className={`py-2 rounded-lg ${activeTab === 'professionals' ? 'bg-[#242329] text-white' : 'text-[#666]'}`}
-          >
-            Equipe
-          </button>
+          <button onClick={() => setActiveTab('dashboard')} className={`py-2 rounded-lg ${activeTab === 'dashboard' ? 'bg-[#242329] text-white' : 'text-[#666]'}`}>Geral</button>
+          <button onClick={() => setActiveTab('appointments')} className={`py-2 rounded-lg ${activeTab === 'appointments' ? 'bg-[#242329] text-white' : 'text-[#666]'}`}>Agenda</button>
+          <button onClick={() => setActiveTab('services')} className={`py-2 rounded-lg ${activeTab === 'services' ? 'bg-[#242329] text-white' : 'text-[#666]'}`}>Serviços</button>
+          <button onClick={() => setActiveTab('professionals')} className={`py-2 rounded-lg ${activeTab === 'professionals' ? 'bg-[#242329] text-white' : 'text-[#666]'}`}>Equipe</button>
         </div>
       </div>
 
@@ -743,10 +816,7 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
             <span className="text-xs font-semibold text-[#805d4e]">PAINEL DO ESTABELECIMENTO</span>
             <h1 className="font-display text-xl md:text-2xl font-bold">{tenant.name}</h1>
           </div>
-          <button
-            onClick={() => openPublicPage(tenant.slug)}
-            className="flex items-center gap-2 rounded-xl border border-[#e9ecef] bg-white px-3 py-2 text-xs font-bold text-[#212529] shadow-sm hover:bg-[#f8f9fa]"
-          >
+          <button onClick={() => openPublicPage(tenant.slug)} className="flex items-center gap-2 rounded-xl border border-[#e9ecef] bg-white px-3 py-2 text-xs font-bold text-[#212529] shadow-sm hover:bg-[#f8f9fa]">
             <ExternalLink size={14} /> Ver Página Pública
           </button>
         </header>
@@ -783,9 +853,7 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
                       <p className="font-bold">{a.customer_name} ({a.customer_phone})</p>
                       <p className="text-[#6c757d]">Data: {a.appointment_date} às {a.appointment_time}</p>
                     </div>
-                    <span className="rounded-lg bg-[#2e7d32]/10 px-2.5 py-1 text-xs font-bold text-[#2e7d32]">
-                      {a.status}
-                    </span>
+                    <span className="rounded-lg bg-[#2e7d32]/10 px-2.5 py-1 text-xs font-bold text-[#2e7d32]">{a.status}</span>
                   </div>
                 ))}
               </div>
@@ -797,10 +865,7 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
           <div className="rounded-2xl border border-[#e9ecef] bg-white p-5 shadow-sm">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-base font-bold">Serviços Cadastrados</h2>
-              <button
-                onClick={() => setShowServiceModal(true)}
-                className="flex items-center gap-2 rounded-xl bg-[#242329] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#343a40]"
-              >
+              <button onClick={() => setShowServiceModal(true)} className="flex items-center gap-2 rounded-xl bg-[#242329] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#343a40]">
                 <Plus size={16} /> Novo Serviço
               </button>
             </div>
@@ -817,9 +882,7 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
                     </div>
                     <div className="flex items-center gap-3">
                       <p className="font-bold text-[#805d4e]">R$ {s.price.toFixed(2)}</p>
-                      <button onClick={() => handleDeleteService(s.id)} className="text-[#d94e70]">
-                        <Trash2 size={16} />
-                      </button>
+                      <button onClick={() => handleDeleteService(s.id)} className="text-[#d94e70]"><Trash2 size={16} /></button>
                     </div>
                   </div>
                 ))}
@@ -832,10 +895,7 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
           <div className="rounded-2xl border border-[#e9ecef] bg-white p-5 shadow-sm">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-base font-bold">Equipe de Profissionais</h2>
-              <button
-                onClick={() => setShowProfModal(true)}
-                className="flex items-center gap-2 rounded-xl bg-[#242329] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#343a40]"
-              >
+              <button onClick={() => setShowProfModal(true)} className="flex items-center gap-2 rounded-xl bg-[#242329] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#343a40]">
                 <Plus size={16} /> Novo Profissional
               </button>
             </div>
@@ -850,9 +910,7 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
                       <p className="font-bold">{p.name}</p>
                       <p className="text-[#6c757d]">{p.role} {p.pix_key ? `· Pix: ${p.pix_key}` : ''}</p>
                     </div>
-                    <button onClick={() => handleDeleteProf(p.id)} className="text-[#d94e70]">
-                      <Trash2 size={16} />
-                    </button>
+                    <button onClick={() => handleDeleteProf(p.id)} className="text-[#d94e70]"><Trash2 size={16} /></button>
                   </div>
                 ))}
               </div>
@@ -866,48 +924,22 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-display text-lg font-bold">Novo Serviço</h2>
-              <button onClick={() => setShowServiceModal(false)} className="text-[#6c757d]">
-                <X size={20} />
-              </button>
+              <button onClick={() => setShowServiceModal(false)} className="text-[#6c757d]"><X size={20} /></button>
             </div>
             <form onSubmit={handleSaveService} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-[#495057]">Nome do Serviço</label>
-                <input
-                  required
-                  type="text"
-                  value={serviceName}
-                  onChange={(e) => setServiceName(e.target.value)}
-                  placeholder="Ex: Esmaltação em Gel"
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none"
-                />
+                <input required type="text" value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="Ex: Esmaltação em Gel" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-[#495057]">Duração (Minutos)</label>
-                <input
-                  required
-                  type="number"
-                  value={serviceDuration}
-                  onChange={(e) => setServiceDuration(e.target.value)}
-                  placeholder="45"
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none"
-                />
+                <input required type="number" value={serviceDuration} onChange={(e) => setServiceDuration(e.target.value)} placeholder="45" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-[#495057]">Preço (R$)</label>
-                <input
-                  required
-                  type="number"
-                  step="0.01"
-                  value={servicePrice}
-                  onChange={(e) => setServicePrice(e.target.value)}
-                  placeholder="90.00"
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none"
-                />
+                <input required type="number" step="0.01" value={servicePrice} onChange={(e) => setServicePrice(e.target.value)} placeholder="90.00" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" />
               </div>
-              <button type="submit" className="mt-6 w-full rounded-xl bg-[#242329] py-3 text-sm font-bold text-white">
-                Cadastrar Serviço
-              </button>
+              <button type="submit" className="mt-6 w-full rounded-xl bg-[#242329] py-3 text-sm font-bold text-white">Cadastrar Serviço</button>
             </form>
           </div>
         </div>
@@ -918,46 +950,22 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-display text-lg font-bold">Novo Profissional</h2>
-              <button onClick={() => setShowProfModal(false)} className="text-[#6c757d]">
-                <X size={20} />
-              </button>
+              <button onClick={() => setShowProfModal(false)} className="text-[#6c757d]"><X size={20} /></button>
             </div>
             <form onSubmit={handleSaveProf} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-[#495057]">Nome Completo</label>
-                <input
-                  required
-                  type="text"
-                  value={profName}
-                  onChange={(e) => setProfName(e.target.value)}
-                  placeholder="Ex: Elena Rostova"
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none"
-                />
+                <input required type="text" value={profName} onChange={(e) => setProfName(e.target.value)} placeholder="Ex: Elena Rostova" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-[#495057]">Cargo / Especialidade</label>
-                <input
-                  required
-                  type="text"
-                  value={profRole}
-                  onChange={(e) => setProfRole(e.target.value)}
-                  placeholder="Ex: Designer de Unhas"
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none"
-                />
+                <input required type="text" value={profRole} onChange={(e) => setProfRole(e.target.value)} placeholder="Ex: Designer de Unhas" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-[#495057]">Chave Pix (Opcional)</label>
-                <input
-                  type="text"
-                  value={profPix}
-                  onChange={(e) => setProfPix(e.target.value)}
-                  placeholder="CPF, Telefone ou E-mail"
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none"
-                />
+                <input type="text" value={profPix} onChange={(e) => setProfPix(e.target.value)} placeholder="CPF, Telefone ou E-mail" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" />
               </div>
-              <button type="submit" className="mt-6 w-full rounded-xl bg-[#242329] py-3 text-sm font-bold text-white">
-                Cadastrar Profissional
-              </button>
+              <button type="submit" className="mt-6 w-full rounded-xl bg-[#242329] py-3 text-sm font-bold text-white">Cadastrar Profissional</button>
             </form>
           </div>
         </div>
@@ -966,7 +974,7 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
   );
 }
 
-// --- VISÃO 3: PÁGINA PÚBLICA DE AGENDAMENTO (APLICA A COR DO TEMA) ---
+// --- VISÃO 3: PÁGINA PÚBLICA DE AGENDAMENTO ---
 function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => void; notify: (msg: string) => void }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [services, setServices] = useState<Service[]>([]);
