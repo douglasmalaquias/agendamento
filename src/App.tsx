@@ -2,13 +2,19 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   Store, 
+  WalletCards, 
+  BarChart3, 
+  CalendarDays, 
   Search, 
   Link2, 
   Pencil, 
   Trash2, 
   Plus, 
+  ArrowLeft, 
   X,
-  CheckCircle2
+  Users,
+  CheckCircle2,
+  ExternalLink
 } from 'lucide-react';
 
 // --- CONFIGURAÇÃO DO SUPABASE ---
@@ -53,6 +59,20 @@ interface Professional {
   active: boolean;
 }
 
+interface Appointment {
+  id: string;
+  tenant_id: string;
+  service_id?: string;
+  professional_id?: string;
+  customer_name: string;
+  customer_phone: string;
+  appointment_date: string;
+  appointment_time: string;
+  status: string;
+  payment_method: string;
+  payment_status: string;
+}
+
 const fallbackTenant: Tenant = {
   id: 'demo-tenant',
   name: 'Barbearia Aurora',
@@ -66,11 +86,12 @@ const fallbackTenant: Tenant = {
   pix_key_type: 'telefone'
 };
 
-type View = 'admin' | 'public';
+type View = 'super-admin' | 'tenant-admin' | 'public';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<View>('admin');
+  const [currentView, setCurrentView] = useState<View>('super-admin');
   const [currentSlug, setCurrentSlug] = useState<string>('');
+  const [activeTenant, setActiveTenant] = useState<Tenant | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,7 +100,7 @@ export default function App() {
       setCurrentSlug(path);
       setCurrentView('public');
     } else {
-      setCurrentView('admin');
+      setCurrentView('super-admin');
     }
   }, []);
 
@@ -94,13 +115,23 @@ export default function App() {
     setCurrentView('public');
   };
 
-  const backToAdmin = () => {
+  const openTenantDashboard = (tenant: Tenant) => {
+    setActiveTenant(tenant);
+    setCurrentView('tenant-admin');
+  };
+
+  const backToSuperAdmin = () => {
     window.history.pushState({}, '', '/');
-    setCurrentView('admin');
+    setActiveTenant(null);
+    setCurrentView('super-admin');
   };
 
   if (currentView === 'public') {
-    return <BookingPage slug={currentSlug} onBack={backToAdmin} notify={notify} />;
+    return <BookingPage slug={currentSlug} onBack={backToSuperAdmin} notify={notify} />;
+  }
+
+  if (currentView === 'tenant-admin' && activeTenant) {
+    return <TenantAdminView tenant={activeTenant} onBack={backToSuperAdmin} notify={notify} openPublicPage={openPublicPage} />;
   }
 
   return (
@@ -110,13 +141,13 @@ export default function App() {
           {notification}
         </div>
       )}
-      <AdminView openPublicPage={openPublicPage} notify={notify} />
+      <SuperAdminView openPublicPage={openPublicPage} openTenantDashboard={openTenantDashboard} notify={notify} />
     </div>
   );
 }
 
-// --- VISÃO ADMINISTRATIVA (SUPER ADMIN) ---
-function AdminView({ openPublicPage, notify }: { openPublicPage: (slug: string) => void; notify: (msg: string) => void }) {
+// --- VISÃO 1: SUPER ADMIN (GERENCIAR TODOS OS COMÉRCIOS) ---
+function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openPublicPage: (slug: string) => void; openTenantDashboard: (tenant: Tenant) => void; notify: (msg: string) => void }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -289,8 +320,10 @@ function AdminView({ openPublicPage, notify }: { openPublicPage: (slug: string) 
                   {filteredTenants.map((t) => (
                     <tr key={t.id} className="hover:bg-[#f8f9fa]">
                       <td className="py-4 font-semibold">
-                        <p className="text-sm text-[#212529]">{t.name}</p>
-                        <span className="text-xs font-normal text-[#6c757d]">{t.category}</span>
+                        <button onClick={() => openTenantDashboard(t)} className="text-left hover:underline">
+                          <p className="text-sm font-bold text-[#212529]">{t.name}</p>
+                          <span className="text-xs font-normal text-[#6c757d]">{t.category}</span>
+                        </button>
                       </td>
                       <td className="py-4 text-[#495057]">{t.city || 'São Paulo, SP'}</td>
                       <td className="py-4 text-[#495057]">{t.whatsapp}</td>
@@ -304,6 +337,12 @@ function AdminView({ openPublicPage, notify }: { openPublicPage: (slug: string) 
                       </td>
                       <td className="py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => openTenantDashboard(t)}
+                            className="rounded-lg bg-[#f8f9fa] border border-[#e9ecef] px-2.5 py-1 text-xs font-semibold text-[#212529] hover:bg-[#e9ecef]"
+                          >
+                            Entrar
+                          </button>
                           <button
                             onClick={() => handleOpenEditModal(t)}
                             className="rounded-lg p-2 text-[#6c757d] hover:bg-[#e9ecef] hover:text-[#212529]"
@@ -414,7 +453,380 @@ function AdminView({ openPublicPage, notify }: { openPublicPage: (slug: string) 
   );
 }
 
-// --- PÁGINA PÚBLICA DE AGENDAMENTO ---
+// --- VISÃO 2: DASHBOARD COM CADASTRO DE SERVIÇOS E PROFISSIONAIS ---
+function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: Tenant; onBack: () => void; notify: (msg: string) => void; openPublicPage: (slug: string) => void }) {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'professionals' | 'appointments'>('dashboard');
+  const [services, setServices] = useState<Service[]>([]);
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+
+  // Modais de Cadastro
+  const [showServiceModal, setShowServiceModal] = useState(false);
+  const [serviceName, setServiceName] = useState('');
+  const [serviceDuration, setServiceDuration] = useState('45');
+  const [servicePrice, setServicePrice] = useState('80');
+
+  const [showProfModal, setShowProfModal] = useState(false);
+  const [profName, setProfName] = useState('');
+  const [profRole, setProfRole] = useState('Especialista');
+  const [profPix, setProfPix] = useState('');
+
+  const loadTenantDetails = async () => {
+    const client = supabase;
+    if (!client) return;
+    const [{ data: s }, { data: p }, { data: a }] = await Promise.all([
+      client.from('marco_services').select('*').eq('tenant_id', tenant.id),
+      client.from('marco_professionals').select('*').eq('tenant_id', tenant.id),
+      client.from('marco_appointments').select('*').eq('tenant_id', tenant.id).order('created_at', { ascending: false })
+    ]);
+    if (s) setServices(s as Service[]);
+    if (p) setProfessionals(p as Professional[]);
+    if (a) setAppointments(a as Appointment[]);
+  };
+
+  useEffect(() => {
+    void loadTenantDetails();
+  }, [tenant]);
+
+  // Salvar Novo Serviço
+  const handleSaveService = async (e: FormEvent) => {
+    e.preventDefault();
+    const client = supabase;
+    if (!client) return;
+
+    const { error } = await client.from('marco_services').insert({
+      tenant_id: tenant.id,
+      name: serviceName,
+      duration_minutes: parseInt(serviceDuration) || 30,
+      price: parseFloat(servicePrice) || 0,
+      active: true
+    });
+
+    if (!error) {
+      notify('Serviço cadastrado com sucesso!');
+      setShowServiceModal(false);
+      setServiceName('');
+      void loadTenantDetails();
+    } else {
+      notify('Erro ao cadastrar serviço: ' + error.message);
+    }
+  };
+
+  // Salvar Novo Profissional
+  const handleSaveProf = async (e: FormEvent) => {
+    e.preventDefault();
+    const client = supabase;
+    if (!client) return;
+
+    const { error } = await client.from('marco_professionals').insert({
+      tenant_id: tenant.id,
+      name: profName,
+      role: profRole,
+      pix_key: profPix,
+      active: true
+    });
+
+    if (!error) {
+      notify('Profissional cadastrado com sucesso!');
+      setShowProfModal(false);
+      setProfName('');
+      setProfPix('');
+      void loadTenantDetails();
+    } else {
+      notify('Erro ao cadastrar profissional: ' + error.message);
+    }
+  };
+
+  const handleDeleteService = async (id: string) => {
+    if (!confirm('Deseja excluir este serviço?')) return;
+    const client = supabase;
+    if (client) {
+      await client.from('marco_services').delete().eq('id', id);
+      notify('Serviço removido!');
+      void loadTenantDetails();
+    }
+  };
+
+  const handleDeleteProf = async (id: string) => {
+    if (!confirm('Deseja excluir este profissional?')) return;
+    const client = supabase;
+    if (client) {
+      await client.from('marco_professionals').delete().eq('id', id);
+      notify('Profissional removido!');
+      void loadTenantDetails();
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen bg-[#f8f9fa]">
+      <aside className="w-64 border-r border-[#e9ecef] bg-white p-6 hidden md:block">
+        <button onClick={onBack} className="mb-6 flex items-center gap-2 text-xs font-semibold text-[#6c757d] hover:text-[#212529]">
+          <ArrowLeft size={16} /> Voltar ao Super Admin
+        </button>
+        <div className="mb-6">
+          <h2 className="font-display text-lg font-bold text-[#212529]">{tenant.name}</h2>
+          <span className="text-xs text-[#6c757d]">{tenant.category} · {tenant.city}</span>
+        </div>
+        <nav className="space-y-1">
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === 'dashboard' ? 'bg-[#242329] text-white' : 'text-[#495057] hover:bg-[#f8f9fa]'}`}
+          >
+            <BarChart3 size={18} /> Visão Geral
+          </button>
+          <button
+            onClick={() => setActiveTab('appointments')}
+            className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === 'appointments' ? 'bg-[#242329] text-white' : 'text-[#495057] hover:bg-[#f8f9fa]'}`}
+          >
+            <CalendarDays size={18} /> Agendamentos
+          </button>
+          <button
+            onClick={() => setActiveTab('services')}
+            className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === 'services' ? 'bg-[#242329] text-white' : 'text-[#495057] hover:bg-[#f8f9fa]'}`}
+          >
+            <WalletCards size={18} /> Serviços
+          </button>
+          <button
+            onClick={() => setActiveTab('professionals')}
+            className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === 'professionals' ? 'bg-[#242329] text-white' : 'text-[#495057] hover:bg-[#f8f9fa]'}`}
+          >
+            <Users size={18} /> Profissionais
+          </button>
+        </nav>
+      </aside>
+
+      <main className="flex-1 p-6 md:p-10">
+        <header className="mb-8 flex items-center justify-between">
+          <div>
+            <span className="text-xs font-semibold text-[#805d4e]">PAINEL DO ESTABELECIMENTO</span>
+            <h1 className="font-display text-2xl font-bold">{tenant.name}</h1>
+          </div>
+          <button
+            onClick={() => openPublicPage(tenant.slug)}
+            className="flex items-center gap-2 rounded-xl border border-[#e9ecef] bg-white px-4 py-2.5 text-xs font-bold text-[#212529] shadow-sm hover:bg-[#f8f9fa]"
+          >
+            <ExternalLink size={16} /> Ver Página Pública
+          </button>
+        </header>
+
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-[#e9ecef] bg-white p-5 shadow-sm">
+                <span className="text-xs font-semibold text-[#6c757d]">Total Agendamentos</span>
+                <p className="mt-2 text-2xl font-bold">{appointments.length}</p>
+              </div>
+              <div className="rounded-2xl border border-[#e9ecef] bg-white p-5 shadow-sm">
+                <span className="text-xs font-semibold text-[#6c757d]">Serviços Ativos</span>
+                <p className="mt-2 text-2xl font-bold">{services.length}</p>
+              </div>
+              <div className="rounded-2xl border border-[#e9ecef] bg-white p-5 shadow-sm">
+                <span className="text-xs font-semibold text-[#6c757d]">Profissionais</span>
+                <p className="mt-2 text-2xl font-bold">{professionals.length}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'appointments' && (
+          <div className="rounded-2xl border border-[#e9ecef] bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-base font-bold">Agendamentos Recebidos</h2>
+            {appointments.length === 0 ? (
+              <p className="text-sm text-[#6c757d]">Nenhum agendamento realizado ainda.</p>
+            ) : (
+              <div className="space-y-3">
+                {appointments.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between rounded-xl border border-[#e9ecef] p-4 text-sm">
+                    <div>
+                      <p className="font-bold">{a.customer_name} ({a.customer_phone})</p>
+                      <p className="text-xs text-[#6c757d]">Data: {a.appointment_date} às {a.appointment_time}</p>
+                    </div>
+                    <span className="rounded-lg bg-[#2e7d32]/10 px-3 py-1 text-xs font-bold text-[#2e7d32]">
+                      {a.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'services' && (
+          <div className="rounded-2xl border border-[#e9ecef] bg-white p-6 shadow-sm">
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-base font-bold">Serviços Cadastrados</h2>
+              <button
+                onClick={() => setShowServiceModal(true)}
+                className="flex items-center gap-2 rounded-xl bg-[#242329] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#343a40]"
+              >
+                <Plus size={16} /> Novo Serviço
+              </button>
+            </div>
+
+            {services.length === 0 ? (
+              <p className="text-sm text-[#6c757d]">Nenhum serviço cadastrado.</p>
+            ) : (
+              <div className="space-y-2">
+                {services.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between rounded-xl border border-[#e9ecef] p-4 text-sm">
+                    <div>
+                      <p className="font-bold">{s.name}</p>
+                      <p className="text-xs text-[#6c757d]">{s.duration_minutes} min</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <p className="font-bold text-[#805d4e]">R$ {s.price.toFixed(2)}</p>
+                      <button onClick={() => handleDeleteService(s.id)} className="text-[#d94e70] hover:opacity-80">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'professionals' && (
+          <div className="rounded-2xl border border-[#e9ecef] bg-white p-6 shadow-sm">
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-base font-bold">Equipe de Profissionais</h2>
+              <button
+                onClick={() => setShowProfModal(true)}
+                className="flex items-center gap-2 rounded-xl bg-[#242329] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#343a40]"
+              >
+                <Plus size={16} /> Novo Profissional
+              </button>
+            </div>
+
+            {professionals.length === 0 ? (
+              <p className="text-sm text-[#6c757d]">Nenhum profissional cadastrado.</p>
+            ) : (
+              <div className="space-y-2">
+                {professionals.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between rounded-xl border border-[#e9ecef] p-4 text-sm">
+                    <div>
+                      <p className="font-bold">{p.name}</p>
+                      <p className="text-xs text-[#6c757d]">{p.role} {p.pix_key ? `· Pix: ${p.pix_key}` : ''}</p>
+                    </div>
+                    <button onClick={() => handleDeleteProf(p.id)} className="text-[#d94e70] hover:opacity-80">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* MODAL DE NOVO SERVIÇO */}
+      {showServiceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-display text-lg font-bold">Novo Serviço</h2>
+              <button onClick={() => setShowServiceModal(false)} className="text-[#6c757d]">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveService} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#495057]">Nome do Serviço</label>
+                <input
+                  required
+                  type="text"
+                  value={serviceName}
+                  onChange={(e) => setServiceName(e.target.value)}
+                  placeholder="Ex: Esmaltação em Gel"
+                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#495057]">Duração (Minutos)</label>
+                <input
+                  required
+                  type="number"
+                  value={serviceDuration}
+                  onChange={(e) => setServiceDuration(e.target.value)}
+                  placeholder="45"
+                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#495057]">Preço (R$)</label>
+                <input
+                  required
+                  type="number"
+                  step="0.01"
+                  value={servicePrice}
+                  onChange={(e) => setServicePrice(e.target.value)}
+                  placeholder="90.00"
+                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none"
+                />
+              </div>
+              <button type="submit" className="mt-6 w-full rounded-xl bg-[#242329] py-3 text-sm font-bold text-white">
+                Cadastrar Serviço
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE NOVO PROFISSIONAL */}
+      {showProfModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-display text-lg font-bold">Novo Profissional</h2>
+              <button onClick={() => setShowProfModal(false)} className="text-[#6c757d]">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveProf} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#495057]">Nome Completo</label>
+                <input
+                  required
+                  type="text"
+                  value={profName}
+                  onChange={(e) => setProfName(e.target.value)}
+                  placeholder="Ex: Elena Rostova"
+                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#495057]">Cargo / Especialidade</label>
+                <input
+                  required
+                  type="text"
+                  value={profRole}
+                  onChange={(e) => setProfRole(e.target.value)}
+                  placeholder="Ex: Designer de Unhas"
+                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#495057]">Chave Pix (Opcional)</label>
+                <input
+                  type="text"
+                  value={profPix}
+                  onChange={(e) => setProfPix(e.target.value)}
+                  placeholder="CPF, Telefone ou E-mail"
+                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none"
+                />
+              </div>
+              <button type="submit" className="mt-6 w-full rounded-xl bg-[#242329] py-3 text-sm font-bold text-white">
+                Cadastrar Profissional
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- VISÃO 3: PÁGINA PÚBLICA DE AGENDAMENTO ---
 function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => void; notify: (msg: string) => void }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -760,7 +1172,7 @@ END:VCALENDAR`;
               <button
                 type="button"
                 onClick={downloadIcsFile}
-                className="w-full rounded-xl bg-[#007aff] py-3 text-xs font-bold text-white shadow-sm hover:opacity-90"
+                className="w-full rounded-xl bg-[#007aff] py-3 text-xs font-bold text-white shadow-sm hover:opacity-90 flex items-center justify-center gap-2"
               >
                  Adicionar ao iPhone / Apple Calendar
               </button>
@@ -768,7 +1180,7 @@ END:VCALENDAR`;
               <button
                 type="button"
                 onClick={openGoogleCalendar}
-                className="w-full rounded-xl bg-[#4285f4] py-3 text-xs font-bold text-white shadow-sm hover:opacity-90"
+                className="w-full rounded-xl bg-[#4285f4] py-3 text-xs font-bold text-white shadow-sm hover:opacity-90 flex items-center justify-center gap-2"
               >
                 🤖 Adicionar ao Google Agenda / Android
               </button>
