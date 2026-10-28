@@ -2,20 +2,13 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   Store, 
-  WalletCards, 
-  BarChart3, 
-  CalendarDays, 
   Search, 
   Link2, 
   Pencil, 
   Trash2, 
   Plus, 
-  ArrowLeft, 
   X,
-  Users,
-  CheckCircle2,
-  Clock,
-  ExternalLink
+  CheckCircle2
 } from 'lucide-react';
 
 // --- CONFIGURAÇÃO DO SUPABASE ---
@@ -60,28 +53,6 @@ interface Professional {
   active: boolean;
 }
 
-interface Appointment {
-  id: string;
-  tenant_id: string;
-  service_id?: string;
-  professional_id?: string;
-  customer_name: string;
-  customer_phone: string;
-  appointment_date: string;
-  appointment_time: string;
-  status: string;
-  payment_method: string;
-  payment_status: string;
-}
-
-interface Subscription {
-  id: string;
-  tenant_id: string;
-  status: string;
-  renewal_date: string;
-}
-
-// Comércio padrão de fallback caso não haja conexão
 const fallbackTenant: Tenant = {
   id: 'demo-tenant',
   name: 'Barbearia Aurora',
@@ -95,17 +66,13 @@ const fallbackTenant: Tenant = {
   pix_key_type: 'telefone'
 };
 
-type View = 'admin' | 'public' | 'not-found';
+type View = 'admin' | 'public';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<View>('admin');
   const [currentSlug, setCurrentSlug] = useState<string>('');
-  const [tenant, setTenant] = useState<Tenant>(fallbackTenant);
-  const [services, setServices] = useState<Service[]>([]);
-  const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [notification, setNotification] = useState<string | null>(null);
 
-  // Roteamento inicial baseado no Path da URL (/slug)
   useEffect(() => {
     const path = window.location.pathname.replace(/^\//, '');
     if (path) {
@@ -143,19 +110,17 @@ export default function App() {
           {notification}
         </div>
       )}
-      <AdminView changeView={setCurrentView} openPublicPage={openPublicPage} notify={notify} />
+      <AdminView openPublicPage={openPublicPage} notify={notify} />
     </div>
   );
 }
 
 // --- VISÃO ADMINISTRATIVA (SUPER ADMIN) ---
-function AdminView({ changeView, openPublicPage, notify }: { changeView: (v: View) => void; openPublicPage: (slug: string) => void; notify: (msg: string) => void }) {
+function AdminView({ openPublicPage, notify }: { openPublicPage: (slug: string) => void; notify: (msg: string) => void }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [subscriptions, setSubscriptions] = useState<Record<string, Subscription>>({});
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Modal de criação / edição de comércio
   const [showModal, setShowModal] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [formName, setFormName] = useState('');
@@ -168,17 +133,8 @@ function AdminView({ changeView, openPublicPage, notify }: { changeView: (v: Vie
     setLoading(true);
     const client = supabase;
     if (client) {
-      const [{ data: tData }, { data: sData }] = await Promise.all([
-        client.from('marco_tenants').select('*').order('created_at', { ascending: false }),
-        client.from('marco_subscriptions').select('*')
-      ]);
-
+      const { data: tData } = await client.from('marco_tenants').select('*').order('created_at', { ascending: false });
       if (tData) setTenants(tData as Tenant[]);
-      if (sData) {
-        const subMap: Record<string, Subscription> = {};
-        sData.forEach((sub: Subscription) => { subMap[sub.tenant_id] = sub; });
-        setSubscriptions(subMap);
-      }
     }
     setLoading(false);
   };
@@ -256,7 +212,6 @@ function AdminView({ changeView, openPublicPage, notify }: { changeView: (v: Vie
 
   return (
     <div className="flex min-h-screen">
-      {/* MENU LATERAL */}
       <aside className="w-64 border-r border-[#e9ecef] bg-white p-6 hidden md:block">
         <div className="mb-8 flex items-center gap-2">
           <div className="h-8 w-8 rounded-lg bg-[#242329] flex items-center justify-center text-white font-bold text-lg">M</div>
@@ -269,7 +224,6 @@ function AdminView({ changeView, openPublicPage, notify }: { changeView: (v: Vie
         </nav>
       </aside>
 
-      {/* CONTEÚDO PRINCIPAL */}
       <main className="flex-1 p-6 md:p-10">
         <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
@@ -284,7 +238,6 @@ function AdminView({ changeView, openPublicPage, notify }: { changeView: (v: Vie
           </button>
         </header>
 
-        {/* CARDS DE MÉTRICAS */}
         <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-[#e9ecef] bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between">
@@ -302,7 +255,6 @@ function AdminView({ changeView, openPublicPage, notify }: { changeView: (v: Vie
           </div>
         </div>
 
-        {/* TABELA DE COMÉRCIOS */}
         <div className="rounded-2xl border border-[#e9ecef] bg-white p-6 shadow-sm">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative flex-1 max-w-md">
@@ -377,7 +329,6 @@ function AdminView({ changeView, openPublicPage, notify }: { changeView: (v: Vie
         </div>
       </main>
 
-      {/* MODAL DE CRIAÇÃO / EDIÇÃO */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
@@ -463,7 +414,7 @@ function AdminView({ changeView, openPublicPage, notify }: { changeView: (v: Vie
   );
 }
 
-// --- PÁGINA PÚBLICA DE AGENDAMENTO COMPLETA ---
+// --- PÁGINA PÚBLICA DE AGENDAMENTO (ÚNICA E UNIFICADA) ---
 function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => void; notify: (msg: string) => void }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -489,7 +440,6 @@ function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => voi
   
   const allTimes = ['09:00', '09:45', '10:30', '11:15', '13:30', '14:15', '15:00', '16:30'];
 
-  // Carrega dados do comércio do Supabase pelo Slug
   useEffect(() => {
     const loadTenantData = async () => {
       const client = supabase;
@@ -513,7 +463,7 @@ function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => voi
     void loadTenantData();
   }, [slug]);
 
-  // Busca do banco de dados os horários já ocupados para não permitir agendamento duplo
+  // Bloqueio de horários já salvos no Supabase
   useEffect(() => {
     if (!tenant || !selectedProfessional) return;
     const selectedDateObj = dates.find(d => d.date === date);
@@ -537,7 +487,6 @@ function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => voi
     void loadOccupiedTimes();
   }, [tenant, selectedProfessional, date]);
 
-  // Filtra removendo horários ocupados
   const times = allTimes.filter(t => !bookedAppointments.includes(t));
 
   if (loading) {
@@ -545,7 +494,15 @@ function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => voi
   }
 
   if (!tenant) {
-    return <NotFoundView slug={slug} onBack={onBack} />;
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#f8f9fa] px-4 text-center">
+        <h1 className="font-display text-4xl font-bold text-[#212529]">404</h1>
+        <p className="mt-2 text-sm text-[#6c757d]">O comércio <span className="font-bold">/{slug}</span> não foi encontrado.</p>
+        <button onClick={onBack} className="mt-6 rounded-xl bg-[#242329] px-6 py-3 text-sm font-bold text-white">
+          Voltar para a página inicial
+        </button>
+      </div>
+    );
   }
 
   const pixKey = selectedProfessional?.pix_key || tenant.pix_key || '';
@@ -558,7 +515,6 @@ function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => voi
     setTimeout(() => setPixCopied(false), 2200);
   };
 
-  // Gerador NATIVO do arquivo .ics no próprio navegador (para iPhone e Apple Calendar)
   const downloadIcsFile = () => {
     if (!selectedService) return;
     const [startH, startM] = time.split(':').map(Number);
@@ -593,7 +549,6 @@ END:VCALENDAR`;
     document.body.removeChild(a);
   };
 
-  // Link para Google Agenda (funciona no PC / Android)
   const openGoogleCalendar = () => {
     if (!selectedService) return;
     const [startH, startM] = time.split(':').map(Number);
@@ -637,7 +592,7 @@ END:VCALENDAR`;
 
     const pixLine = paymentMethod === 'pix' && pixKey ? `\n*Pagamento:* Pix (chave: ${pixKey})` : '\n*Pagamento:* No local';
     
-    // TEXTO 100% LIMPO - SEM NENHUM LINK NA MENSAGEM DO WHATSAPP
+    // MENSAGEM DO WHATSAPP TOTALMENTE LIMPA (SEM NENHUM LINK DE AGENDA)
     const message = `Olá, ${tenant.name}! Gostaria de confirmar meu agendamento.\n\n` +
       `*Cliente:* ${name}\n` +
       `*Serviço:* ${selectedService.name}\n` +
@@ -826,22 +781,6 @@ END:VCALENDAR`;
           </div>
         )}
       </main>
-    </div>
-  );
-}
-
-// --- PÁGINA 404 (QUANDO O COMÉRCIO NÃO EXISTE) ---
-function NotFoundView({ slug, onBack }: { slug: string; onBack: () => void }) {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#f8f9fa] px-4 text-center">
-      <h1 className="font-display text-4xl font-bold text-[#212529]">404</h1>
-      <p className="mt-2 text-sm text-[#6c757d]">O comércio <span className="font-bold">/{slug}</span> não foi encontrado na plataforma Marcô.</p>
-      <button
-        onClick={onBack}
-        className="mt-6 rounded-xl bg-[#242329] px-6 py-3 text-sm font-bold text-white shadow-sm hover:bg-[#343a40]"
-      >
-        Voltar para a página inicial
-      </button>
     </div>
   );
 }
