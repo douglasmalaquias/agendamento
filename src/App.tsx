@@ -195,11 +195,11 @@ export default function App() {
   };
 
   if (authLoading) {
-    return <div className="flex h-screen items-center justify-center text-sm text-[#666]">Carregando sistema...</div>;
+    return <div className="flex h-screen items-center justify-center text-sm text-[#666]">A carregar sistema...</div>;
   }
 
   if (currentView === 'public') {
-    return <BookingPage slug={currentSlug} onBack={backToSuperAdmin} notify={notify} />;
+    return <BookingPage slug={currentSlug} onBack={backToSuperAdmin} notify={notify} isStandalone={!user} />;
   }
 
   if (currentView === 'login') {
@@ -246,7 +246,7 @@ function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string)
     const { data, error } = await client.auth.signInWithPassword({ email, password });
 
     if (error) {
-      notify('E-mail ou senha incorretos');
+      notify('E-mail ou palavra-passe incorretos');
     } else if (data.user) {
       await onLoginSuccess(data.user.email ?? '');
     }
@@ -259,7 +259,7 @@ function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string)
         <div className="text-center mb-6">
           <div className="mx-auto h-12 w-12 rounded-2xl bg-[#242329] flex items-center justify-center text-white font-bold text-2xl mb-3">M</div>
           <h1 className="font-display text-2xl font-bold">Marcô.</h1>
-          <p className="text-xs text-[#6c757d] mt-1">Acesse o seu painel administrativo</p>
+          <p className="text-xs text-[#6c757d] mt-1">Aceda ao seu painel administrativo</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
@@ -279,7 +279,7 @@ function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string)
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#495057] mb-1">Senha</label>
+            <label className="block text-xs font-semibold text-[#495057] mb-1">Palavra-passe</label>
             <div className="relative">
               <Lock className="absolute left-3.5 top-3 text-[#adb5bd]" size={16} />
               <input
@@ -298,7 +298,7 @@ function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string)
             disabled={loading}
             className="w-full rounded-xl bg-[#242329] py-3 text-xs font-bold text-white shadow-md hover:bg-[#343a40] disabled:opacity-50"
           >
-            {loading ? 'Entrando...' : 'Entrar no Painel'}
+            {loading ? 'A entrar...' : 'Entrar no Painel'}
           </button>
         </form>
       </div>
@@ -306,7 +306,7 @@ function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string)
   );
 }
 
-// --- VISÃO 1: SUPER ADMIN (GERENCIAMENTO DE SENHAS) ---
+// --- VISÃO 1: SUPER ADMIN ---
 function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify, userEmail }: { openPublicPage: (slug: string) => void; openTenantDashboard: (tenant: Tenant) => void; onLogout: () => void; notify: (msg: string) => void; userEmail?: string }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [search, setSearch] = useState('');
@@ -392,16 +392,15 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
       }
     }
 
-    // Atualizar/Gerar Senha se preenchida
     if (formOwnerEmail && formPassword) {
       const { error: pwdError } = await client.rpc('admin_set_user_password', {
         user_email: formOwnerEmail.trim().toLowerCase(),
         new_password: formPassword
       });
       if (pwdError) {
-        notify('Aviso: Comércio salvo, mas erro ao definir senha. Execute o SQL de suporte.');
+        notify('Aviso: Comércio salvo, mas erro ao definir palavra-passe.');
       } else {
-        notify('E-mail e Senha de acesso configurados!');
+        notify('E-mail e Palavra-passe de acesso configurados!');
       }
     }
 
@@ -485,7 +484,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
           </div>
 
           {loading ? (
-            <p className="py-8 text-center text-sm text-[#6c757d]">Carregando comércios...</p>
+            <p className="py-8 text-center text-sm text-[#6c757d]">A carregar comércios...</p>
           ) : filteredTenants.length === 0 ? (
             <p className="py-8 text-center text-sm text-[#6c757d]">Nenhum comércio encontrado.</p>
           ) : (
@@ -575,7 +574,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
         </div>
       </main>
 
-      {/* MODAL COM CAMPO DE E-MAIL E SENHA */}
+      {/* MODAL COM CAMPO DE E-MAIL E PALAVRA-PASSE */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 overflow-y-auto">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl my-auto">
@@ -598,7 +597,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
                 </div>
                 <div>
                   <label className="block font-semibold text-[#495057]">
-                    {editingTenant ? 'Nova Senha (deixe em branco se não quiser alterar)' : 'Definir Senha Inicial'}
+                    {editingTenant ? 'Nova Palavra-passe (deixe em branco para não alterar)' : 'Definir Palavra-passe Inicial'}
                   </label>
                   <input type="password" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} placeholder="••••••••" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none bg-white" />
                 </div>
@@ -974,8 +973,8 @@ function TenantAdminView({ tenant, onBack, onLogout, notify, openPublicPage, isS
   );
 }
 
-// --- VISÃO 3: PÁGINA PÚBLICA DE AGENDAMENTO ---
-function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => void; notify: (msg: string) => void }) {
+// --- VISÃO 3: PÁGINA PÚBLICA DE AGENDAMENTO (SEM BOTÃO VOLTAR NA ETAPA INICIAL) ---
+function BookingPage({ slug, onBack, notify, isStandalone }: { slug: string; onBack: () => void; notify: (msg: string) => void; isStandalone?: boolean }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -1049,7 +1048,7 @@ function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => voi
   const times = allTimes.filter(t => !bookedAppointments.includes(t));
 
   if (loading) {
-    return <div className="flex h-screen items-center justify-center text-sm text-[#888]">Carregando agendamento...</div>;
+    return <div className="flex h-screen items-center justify-center text-sm text-[#888]">A carregar agendamento...</div>;
   }
 
   if (!tenant) {
@@ -1057,9 +1056,6 @@ function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => voi
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#f8f9fa] px-4 text-center">
         <h1 className="font-display text-4xl font-bold text-[#212529]">404</h1>
         <p className="mt-2 text-sm text-[#6c757d]">O comércio <span className="font-bold">/{slug}</span> não foi encontrado.</p>
-        <button onClick={onBack} className="mt-6 rounded-xl bg-[#242329] px-6 py-3 text-sm font-bold text-white">
-          Voltar para a página inicial
-        </button>
       </div>
     );
   }
@@ -1166,9 +1162,14 @@ END:VCALENDAR`;
   return (
     <div className="min-h-screen pb-12 transition-colors" style={{ backgroundColor: themeStyle.bg, color: themeStyle.textPrimary }}>
       <header className="flex items-center justify-between border-b border-black/10 px-5 py-4" style={{ backgroundColor: themeStyle.cardBg }}>
-        <button onClick={onBack} className="text-xs font-semibold opacity-70 hover:opacity-100">← Voltar</button>
-        <span className="font-display font-bold">{tenant.name}</span>
-        <span className="text-xs opacity-60">{tenant.category}</span>
+        {step > 1 ? (
+          <button onClick={() => setStep(step - 1)} className="text-xs font-semibold opacity-70 hover:opacity-100">← Voltar</button>
+        ) : (!isStandalone ? (
+          <button onClick={onBack} className="text-xs font-semibold opacity-70 hover:opacity-100">← Painel</button>
+        ) : <div className="w-12"></div>)}
+
+        <span className="font-display font-bold text-center flex-1">{tenant.name}</span>
+        <span className="text-xs opacity-60 text-right w-12">{tenant.category}</span>
       </header>
 
       <main className="mx-auto max-w-xl px-4 pt-6">
