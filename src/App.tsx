@@ -146,7 +146,7 @@ export default function App() {
   );
 }
 
-// --- VISÃO 1: SUPER ADMIN (GERENCIAR TODOS OS COMÉRCIOS) ---
+// --- VISÃO 1: SUPER ADMIN ---
 function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openPublicPage: (slug: string) => void; openTenantDashboard: (tenant: Tenant) => void; notify: (msg: string) => void }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [search, setSearch] = useState('');
@@ -453,7 +453,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
   );
 }
 
-// --- VISÃO 2: DASHBOARD COM CADASTRO DE SERVIÇOS E PROFISSIONAIS ---
+// --- VISÃO 2: DASHBOARD DO ESTABELECIMENTO COM NAVEGAÇÃO MÓVEL NO TOPO ---
 function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: Tenant; onBack: () => void; notify: (msg: string) => void; openPublicPage: (slug: string) => void }) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'professionals' | 'appointments'>('dashboard');
   const [services, setServices] = useState<Service[]>([]);
@@ -558,7 +558,8 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
   };
 
   return (
-    <div className="flex min-h-screen bg-[#f8f9fa]">
+    <div className="flex flex-col md:flex-row min-h-screen bg-[#f8f9fa]">
+      {/* MENU LATERAL (Aparece no PC) */}
       <aside className="w-64 border-r border-[#e9ecef] bg-white p-6 hidden md:block">
         <button onClick={onBack} className="mb-6 flex items-center gap-2 text-xs font-semibold text-[#6c757d] hover:text-[#212529]">
           <ArrowLeft size={16} /> Voltar ao Super Admin
@@ -595,22 +596,55 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
         </nav>
       </aside>
 
-      <main className="flex-1 p-6 md:p-10">
-        <header className="mb-8 flex items-center justify-between">
+      {/* MENU SUPERIOR EM ABAS (Aparece no Telemóvel) */}
+      <div className="md:hidden border-b border-[#e9ecef] bg-white p-4 space-y-3">
+        <button onClick={onBack} className="flex items-center gap-1 text-xs font-semibold text-[#6c757d]">
+          <ArrowLeft size={14} /> Voltar ao Super Admin
+        </button>
+        <div className="flex grid grid-cols-4 gap-1 bg-[#f8f9fa] p-1 rounded-xl text-xs font-bold text-center">
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`py-2 rounded-lg ${activeTab === 'dashboard' ? 'bg-[#242329] text-white' : 'text-[#666]'}`}
+          >
+            Geral
+          </button>
+          <button
+            onClick={() => setActiveTab('appointments')}
+            className={`py-2 rounded-lg ${activeTab === 'appointments' ? 'bg-[#242329] text-white' : 'text-[#666]'}`}
+          >
+            Agenda
+          </button>
+          <button
+            onClick={() => setActiveTab('services')}
+            className={`py-2 rounded-lg ${activeTab === 'services' ? 'bg-[#242329] text-white' : 'text-[#666]'}`}
+          >
+            Serviços
+          </button>
+          <button
+            onClick={() => setActiveTab('professionals')}
+            className={`py-2 rounded-lg ${activeTab === 'professionals' ? 'bg-[#242329] text-white' : 'text-[#666]'}`}
+          >
+            Equipe
+          </button>
+        </div>
+      </div>
+
+      <main className="flex-1 p-4 md:p-10">
+        <header className="mb-6 flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-[#805d4e]">PAINEL DO ESTABELECIMENTO</span>
-            <h1 className="font-display text-2xl font-bold">{tenant.name}</h1>
+            <h1 className="font-display text-xl md:text-2xl font-bold">{tenant.name}</h1>
           </div>
           <button
             onClick={() => openPublicPage(tenant.slug)}
-            className="flex items-center gap-2 rounded-xl border border-[#e9ecef] bg-white px-4 py-2.5 text-xs font-bold text-[#212529] shadow-sm hover:bg-[#f8f9fa]"
+            className="flex items-center gap-2 rounded-xl border border-[#e9ecef] bg-white px-3 py-2 text-xs font-bold text-[#212529] shadow-sm hover:bg-[#f8f9fa]"
           >
-            <ExternalLink size={16} /> Ver Página Pública
+            <ExternalLink size={14} /> Ver Página Pública
           </button>
         </header>
 
         {activeTab === 'dashboard' && (
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="rounded-2xl border border-[#e9ecef] bg-white p-5 shadow-sm">
                 <span className="text-xs font-semibold text-[#6c757d]">Total Agendamentos</span>
@@ -629,19 +663,19 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
         )}
 
         {activeTab === 'appointments' && (
-          <div className="rounded-2xl border border-[#e9ecef] bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-[#e9ecef] bg-white p-5 shadow-sm">
             <h2 className="mb-4 text-base font-bold">Agendamentos Recebidos</h2>
             {appointments.length === 0 ? (
               <p className="text-sm text-[#6c757d]">Nenhum agendamento realizado ainda.</p>
             ) : (
               <div className="space-y-3">
                 {appointments.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between rounded-xl border border-[#e9ecef] p-4 text-sm">
+                  <div key={a.id} className="flex items-center justify-between rounded-xl border border-[#e9ecef] p-3 text-xs md:text-sm">
                     <div>
                       <p className="font-bold">{a.customer_name} ({a.customer_phone})</p>
-                      <p className="text-xs text-[#6c757d]">Data: {a.appointment_date} às {a.appointment_time}</p>
+                      <p className="text-[#6c757d]">Data: {a.appointment_date} às {a.appointment_time}</p>
                     </div>
-                    <span className="rounded-lg bg-[#2e7d32]/10 px-3 py-1 text-xs font-bold text-[#2e7d32]">
+                    <span className="rounded-lg bg-[#2e7d32]/10 px-2.5 py-1 text-xs font-bold text-[#2e7d32]">
                       {a.status}
                     </span>
                   </div>
@@ -652,7 +686,7 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
         )}
 
         {activeTab === 'services' && (
-          <div className="rounded-2xl border border-[#e9ecef] bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-[#e9ecef] bg-white p-5 shadow-sm">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-base font-bold">Serviços Cadastrados</h2>
               <button
@@ -668,14 +702,14 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
             ) : (
               <div className="space-y-2">
                 {services.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between rounded-xl border border-[#e9ecef] p-4 text-sm">
+                  <div key={s.id} className="flex items-center justify-between rounded-xl border border-[#e9ecef] p-3 text-xs md:text-sm">
                     <div>
                       <p className="font-bold">{s.name}</p>
-                      <p className="text-xs text-[#6c757d]">{s.duration_minutes} min</p>
+                      <p className="text-[#6c757d]">{s.duration_minutes} min</p>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                       <p className="font-bold text-[#805d4e]">R$ {s.price.toFixed(2)}</p>
-                      <button onClick={() => handleDeleteService(s.id)} className="text-[#d94e70] hover:opacity-80">
+                      <button onClick={() => handleDeleteService(s.id)} className="text-[#d94e70]">
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -687,7 +721,7 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
         )}
 
         {activeTab === 'professionals' && (
-          <div className="rounded-2xl border border-[#e9ecef] bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-[#e9ecef] bg-white p-5 shadow-sm">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-base font-bold">Equipe de Profissionais</h2>
               <button
@@ -703,12 +737,12 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
             ) : (
               <div className="space-y-2">
                 {professionals.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between rounded-xl border border-[#e9ecef] p-4 text-sm">
+                  <div key={p.id} className="flex items-center justify-between rounded-xl border border-[#e9ecef] p-3 text-xs md:text-sm">
                     <div>
                       <p className="font-bold">{p.name}</p>
-                      <p className="text-xs text-[#6c757d]">{p.role} {p.pix_key ? `· Pix: ${p.pix_key}` : ''}</p>
+                      <p className="text-[#6c757d]">{p.role} {p.pix_key ? `· Pix: ${p.pix_key}` : ''}</p>
                     </div>
-                    <button onClick={() => handleDeleteProf(p.id)} className="text-[#d94e70] hover:opacity-80">
+                    <button onClick={() => handleDeleteProf(p.id)} className="text-[#d94e70]">
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -1090,7 +1124,7 @@ END:VCALENDAR`;
             <div>
               <h3 className="mb-2 text-xs font-bold uppercase text-[#777]">Horários Disponíveis</h3>
               {times.length === 0 ? (
-                <p className="text-xs text-[#d94e70] p-2 bg-white rounded-xl border border-[#e2ddd3]">Nenhum horário disponível para este profissional nesta data.</p>
+                <p className="text-xs text-[#d94e70] p-2 bg-[#fff] rounded-xl border border-[#e2ddd3]">Nenhum horário disponível para este profissional nesta data.</p>
               ) : (
                 <div className="grid grid-cols-4 gap-2">
                   {times.map((t) => (
