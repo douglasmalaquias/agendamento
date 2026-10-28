@@ -1,5 +1,5 @@
 import React, { useState, useEffect, FormEvent } from 'react';
-import { createClient } from '@supabase/supabase-sandbox';
+import { createClient } from '@supabase/supabase-js';
 import { 
   Store, 
   WalletCards, 
