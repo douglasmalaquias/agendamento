@@ -224,11 +224,25 @@ function AdminView({ changeView, openPublicPage }: { changeView: (view: View) =>
   const [query, setQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'pending'>('all');
 
+  // Estados para modal de criar/editar comércio
+  const [showTenantModal, setShowTenantModal] = useState(false);
+  const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
+  const [tenantForm, setTenantForm] = useState({
+    name: '',
+    slug: '',
+    category: 'Barbearia',
+    phone: '',
+    whatsapp: '',
+    city: 'São Paulo, SP',
+    pix_key: '',
+    pix_key_type: 'telefone'
+  });
+
   const load = async () => {
     const client = supabase;
     if (!client) { setLoading(false); return; }
     const [{ data: tenantData, error: tenantError }, { data: subData, error: subError }, { count, error: countError }] = await Promise.all([
-      client.from('marco_tenants').select('id, name, slug, category, phone, whatsapp, city, theme, pix_key, pix_key_type').order('name'),
+      client.from('marco_tenants').select('*').order('name'),
       client.from('marco_subscriptions').select('tenant_id, status, renewal_date'),
       client.from('marco_appointments').select('*', { count: 'exact', head: true }),
     ]);
@@ -243,6 +257,89 @@ function AdminView({ changeView, openPublicPage }: { changeView: (view: View) =>
   };
 
   useEffect(() => { void load(); }, []);
+
+  const openCreateModal = () => {
+    setEditingTenant(null);
+    setTenantForm({
+      name: '',
+      slug: '',
+      category: 'Barbearia',
+      phone: '',
+      whatsapp: '',
+      city: 'São Paulo, SP',
+      pix_key: '',
+      pix_key_type: 'telefone'
+    });
+    setShowTenantModal(true);
+  };
+
+  const openEditModal = (t: Tenant) => {
+    setEditingTenant(t);
+    setTenantForm({
+      name: t.name,
+      slug: t.slug,
+      category: t.category,
+      phone: t.phone || '',
+      whatsapp: t.whatsapp || '',
+      city: t.city || 'São Paulo, SP',
+      pix_key: t.pix_key || '',
+      pix_key_type: t.pix_key_type || 'telefone'
+    });
+    setShowTenantModal(true);
+  };
+
+  const handleSaveTenant = async (e: FormEvent) => {
+    e.preventDefault();
+    const client = supabase;
+    if (!client) return;
+
+    const payload = {
+      name: tenantForm.name,
+      slug: tenantForm.slug || tenantForm.name.toLowerCase().replace(/\s+/g, '-'),
+      category: tenantForm.category,
+      phone: tenantForm.phone,
+      whatsapp: tenantForm.whatsapp,
+      city: tenantForm.city,
+      pix_key: tenantForm.pix_key,
+      pix_key_type: tenantForm.pix_key_type,
+      theme: 'dark'
+    };
+
+    if (editingTenant) {
+      // Editar
+      const { error } = await client.from('marco_tenants').update(payload).eq('id', editingTenant.id);
+      if (!error) {
+        setShowTenantModal(false);
+        void load();
+      } else {
+        alert('Erro ao atualizar comércio: ' + error.message);
+      }
+    } else {
+      // Criar novo
+      const { data, error } = await client.from('marco_tenants').insert(payload).select().maybeSingle();
+      if (!error && data) {
+        // Criar assinatura inicial paga/pendente
+        await client.from('marco_subscriptions').insert({ tenant_id: data.id, status: 'paid', renewal_date: new Date().toISOString().slice(0, 10) });
+        setShowTenantModal(false);
+        void load();
+      } else {
+        alert('Erro ao cadastrar comércio: ' + (error?.message || 'Verifique se o slug é único'));
+      }
+    }
+  };
+
+  const handleDeleteTenant = async (id: string, name: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o comércio "${name}"? Essa ação não pode ser desfeita.`)) return;
+    const client = supabase;
+    if (!client) return;
+
+    const { error } = await client.from('marco_tenants').delete().eq('id', id);
+    if (!error) {
+      void load();
+    } else {
+      alert('Erro ao excluir comércio: ' + error.message);
+    }
+  };
 
   const markPaid = async (tenantId: string) => {
     const client = supabase;
@@ -272,7 +369,204 @@ function AdminView({ changeView, openPublicPage }: { changeView: (view: View) =>
     return `${d}/${m}/${y}`;
   };
 
-  return <div className="mx-auto max-w-[1200px]"><div className="mb-8 flex items-end justify-between"><div><p className="mb-2 text-xs font-semibold text-[#a2a19b]">Gestão Marcô</p><h1 className="font-display text-[30px] font-semibold tracking-tight">Super Admin<span className="text-[#e24768]">.</span></h1><p className="mt-1 text-sm text-[#95948e]">Acompanhe comércios, mensalidades e pagamentos.</p></div><button onClick={() => changeView('dashboard')} className="hidden items-center gap-2 rounded-xl border border-[#e4e3dd] bg-white px-4 py-2.5 text-xs font-semibold sm:flex"><ArrowLeft size={15} />Voltar ao comércio</button></div><div className="grid gap-3 sm:grid-cols-4"><StatCard label="Comércios ativos" value={loading ? '—' : `${total}`} change={total > 0 ? 'cadastrados' : 'nenhum'} icon={Store} accent="blue" /><StatCard label="Mensalidades pagas" value={loading ? '—' : `${paidCount}`} change={total > 0 ? `${Math.round((paidCount / total) * 100)}%` : '0%'} icon={WalletCards} accent="green" /><StatCard label="Pagamentos pendentes" value={loading ? '—' : `${pendingCount}`} change={pendingCount > 0 ? 'atenção' : 'em dia'} icon={BarChart3} accent="pink" /><StatCard label="Agendamentos no total" value={loading ? '—' : `${appointmentsCount}`} change="histórico" icon={CalendarDays} accent="gold" /></div><div className="mt-6 rounded-2xl border border-[#e7e6e0] bg-white p-5 md:p-6"><div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-display text-lg font-semibold">Todos os comércios</h2><p className="mt-1 text-xs text-[#a2a19b]">{loading ? 'Carregando...' : `${filtered.length} de ${total} comércios`}</p></div><div className="flex flex-col gap-2 sm:flex-row sm:items-center"><div className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#bbb9b1]" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por nome, ramo ou cidade" className="w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] py-2.5 pl-9 pr-3 text-xs outline-none focus:border-[#242329] sm:w-64" /></div><div className="flex gap-1 rounded-xl bg-[#f7f7f5] p-1"><button onClick={() => setFilterStatus('all')} className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold ${filterStatus === 'all' ? 'bg-white text-[#242329] shadow-sm' : 'text-[#9b9a93]'}`}>Todos</button><button onClick={() => setFilterStatus('paid')} className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold ${filterStatus === 'paid' ? 'bg-white text-[#5d8068] shadow-sm' : 'text-[#9b9a93]'}`}>Pagos</button><button onClick={() => setFilterStatus('pending')} className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold ${filterStatus === 'pending' ? 'bg-white text-[#d94e70] shadow-sm' : 'text-[#9b9a93]'}`}>Pendentes</button></div></div></div><div className="max-h-[440px] overflow-y-auto overflow-x-auto rounded-xl border border-[#efeee9]"><table className="w-full min-w-[720px] text-left"><thead className="sticky top-0 z-10 bg-white"><tr className="border-b border-[#efeee9] text-[10px] uppercase tracking-[0.12em] text-[#aaa9a3]"><th className="px-4 py-3 font-semibold">Comércio</th><th className="px-4 py-3 font-semibold">Cidade</th><th className="px-4 py-3 font-semibold">Mensalidade</th><th className="px-4 py-3 font-semibold">Renovação</th><th className="px-4 py-3 font-semibold">Link</th><th /></tr></thead><tbody>{loading && <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-[#aaa9a3]">Carregando comércios...</td></tr>}{!loading && filtered.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-[#aaa9a3]">Nenhum comércio encontrado com esse filtro.</td></tr>}{!loading && filtered.map((item) => { const sub = subs[item.id]; const isPaid = sub?.status === 'paid'; return <tr key={item.id} className="border-b border-[#f2f1ec] last:border-0"><td className="px-4 py-4"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f4e9e3] text-[10px] font-bold text-[#805d4e]">{initialsOf(item.name)}</span><div><p className="text-[13px] font-semibold">{item.name}</p><p className="mt-0.5 text-[11px] text-[#aaa9a3]">{item.category}</p></div></div></td><td className="px-4 py-4 text-xs text-[#77766f]">{item.city}</td><td className="px-4 py-4">{isPaid ? <span className="rounded-full bg-[#e7f2e8] px-2 py-1 text-[10px] font-bold text-[#65916d]">Pago</span> : <button onClick={() => markPaid(item.id)} className="rounded-full bg-[#fbf0db] px-2 py-1 text-[10px] font-bold text-[#ad813c] transition hover:bg-[#f5e6c2]">Marcar como pago</button>}</td><td className="px-4 py-4 text-xs text-[#77766f]">{sub ? formatDate(sub.renewal_date) : '—'}</td><td className="px-4 py-4"><button onClick={() => openPublicPage(item.slug)} className="flex items-center gap-1 text-[11px] font-semibold text-[#a06945] hover:underline"><Link2 size={12} />/{item.slug}</button></td><td className="px-4 py-4 text-right"><button onClick={() => openPublicPage(item.slug)} className="rounded-lg p-2 text-[#aaa9a3] hover:bg-[#f7f7f5]"><MoreHorizontal size={17} /></button></td></tr>; })}</tbody></table></div></div></div>;
+  return (
+    <div className="mx-auto max-w-[1200px]">
+      <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <p className="mb-2 text-xs font-semibold text-[#a2a19b]">Gestão Marcô</p>
+          <h1 className="font-display text-[30px] font-semibold tracking-tight">Super Admin<span className="text-[#e24768]">.</span></h1>
+          <p className="mt-1 text-sm text-[#95948e]">Acompanhe comércios, mensalidades e pagamentos.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={openCreateModal} className="flex items-center gap-2 rounded-xl bg-[#242329] px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-[#242329]/10">
+            <Plus size={15} /> Novo Comércio
+          </button>
+          <button onClick={() => changeView('dashboard')} className="hidden items-center gap-2 rounded-xl border border-[#e4e3dd] bg-white px-4 py-2.5 text-xs font-semibold sm:flex">
+            <ArrowLeft size={15} /> Voltar ao comércio
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-4">
+        <StatCard label="Comércios ativos" value={loading ? '—' : `${total}`} change={total > 0 ? 'cadastrados' : 'nenhum'} icon={Store} accent="blue" />
+        <StatCard label="Mensalidades pagas" value={loading ? '—' : `${paidCount}`} change={total > 0 ? `${Math.round((paidCount / total) * 100)}%` : '0%'} icon={WalletCards} accent="green" />
+        <StatCard label="Pagamentos pendentes" value={loading ? '—' : `${pendingCount}`} change={pendingCount > 0 ? 'atenção' : 'em dia'} icon={BarChart3} accent="pink" />
+        <StatCard label="Agendamentos no total" value={loading ? '—' : `${appointmentsCount}`} change="histórico" icon={CalendarDays} accent="gold" />
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-[#e7e6e0] bg-white p-5 md:p-6">
+        <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Todos os comércios</h2>
+            <p className="mt-1 text-xs text-[#a2a19b]">{loading ? 'Carregando...' : `${filtered.length} de ${total} comércios`}</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#bbb9b1]" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por nome, ramo ou cidade" className="w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] py-2.5 pl-9 pr-3 text-xs outline-none focus:border-[#242329] sm:w-64" />
+            </div>
+            <div className="flex gap-1 rounded-xl bg-[#f7f7f5] p-1">
+              <button onClick={() => setFilterStatus('all')} className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold ${filterStatus === 'all' ? 'bg-white text-[#242329] shadow-sm' : 'text-[#9b9a93]'}`}>Todos</button>
+              <button onClick={() => setFilterStatus('paid')} className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold ${filterStatus === 'paid' ? 'bg-white text-[#5d8068] shadow-sm' : 'text-[#9b9a93]'}`}>Pagos</button>
+              <button onClick={() => setFilterStatus('pending')} className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold ${filterStatus === 'pending' ? 'bg-white text-[#d94e70] shadow-sm' : 'text-[#9b9a93]'}`}>Pendentes</button>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-h-[440px] overflow-y-auto overflow-x-auto rounded-xl border border-[#efeee9]">
+          <table className="w-full min-w-[720px] text-left">
+            <thead className="sticky top-0 z-10 bg-white">
+              <tr className="border-b border-[#efeee9] text-[10px] uppercase tracking-[0.12em] text-[#aaa9a3]">
+                <th className="px-4 py-3 font-semibold">Comércio</th>
+                <th className="px-4 py-3 font-semibold">Cidade</th>
+                <th className="px-4 py-3 font-semibold">Mensalidade</th>
+                <th className="px-4 py-3 font-semibold">Renovação</th>
+                <th className="px-4 py-3 font-semibold">Link</th>
+                <th className="px-4 py-3 font-semibold text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-[#aaa9a3]">Carregando comércios...</td></tr>}
+              {!loading && filtered.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-[#aaa9a3]">Nenhum comércio encontrado.</td></tr>}
+              {!loading && filtered.map((item) => {
+                const sub = subs[item.id];
+                const isPaid = sub?.status === 'paid';
+                return (
+                  <tr key={item.id} className="border-b border-[#f2f1ec] last:border-0 hover:bg-[#fafaf8]">
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f4e9e3] text-[10px] font-bold text-[#805d4e]">{initialsOf(item.name)}</span>
+                        <div>
+                          <p className="text-[13px] font-semibold">{item.name}</p>
+                          <p className="mt-0.5 text-[11px] text-[#aaa9a3]">{item.category}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 text-xs text-[#77766f]">{item.city}</td>
+                    <td className="px-4 py-4">
+                      {isPaid ? (
+                        <span className="rounded-full bg-[#e7f2e8] px-2.5 py-1 text-[10px] font-bold text-[#65916d]">Pago</span>
+                      ) : (
+                        <button onClick={() => markPaid(item.id)} className="rounded-full bg-[#fbf0db] px-2.5 py-1 text-[10px] font-bold text-[#ad813c] transition hover:bg-[#f5e6c2]">Marcar pago</button>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 text-xs text-[#77766f]">{sub ? formatDate(sub.renewal_date) : '—'}</td>
+                    <td className="px-4 py-4">
+                      <button onClick={() => openPublicPage(item.slug)} className="flex items-center gap-1 text-[11px] font-semibold text-[#a06945] hover:underline">
+                        <Link2 size={12} />/{item.slug}
+                      </button>
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => openEditModal(item)} title="Editar comércio" className="rounded-lg p-2 text-[#77766f] hover:bg-[#f7f7f5] hover:text-[#242329]">
+                          <Pencil size={15} />
+                        </button>
+                        <button onClick={() => handleDeleteTenant(item.id, item.name)} title="Excluir comércio" className="rounded-lg p-2 text-[#d94e70] hover:bg-[#fbe8ed]">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* MODAL CADASTRAR / EDITAR COMÉRCIO */}
+      {showTenantModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#202127]/40 p-4 backdrop-blur-sm">
+          <form onSubmit={handleSaveTenant} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-xl font-semibold">{editingTenant ? 'Editar comércio' : 'Novo comércio'}</h2>
+                <p className="mt-1 text-xs text-[#a2a19b]">{editingTenant ? 'Altere as informações do estabelecimento' : 'Cadastre um novo estabelecimento na plataforma'}</p>
+              </div>
+              <button type="button" onClick={() => setShowTenantModal(false)} className="rounded-xl p-2 text-[#aaa9a3] hover:bg-[#f7f7f5]"><X size={18} /></button>
+            </div>
+
+            <div className="mt-5 space-y-3 text-xs font-semibold">
+              <label className="block">
+                Nome do Comércio
+                <input
+                  value={tenantForm.name}
+                  onChange={(e) => setTenantForm({ ...tenantForm, name: e.target.value, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
+                  required
+                  placeholder="Ex: Barbearia Estilo"
+                  className="mt-1.5 w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] p-3 outline-none focus:border-[#242329]"
+                />
+              </label>
+
+              <label className="block">
+                Link Público (Slug)
+                <input
+                  value={tenantForm.slug}
+                  onChange={(e) => setTenantForm({ ...tenantForm, slug: e.target.value })}
+                  required
+                  placeholder="barbearia-estilo"
+                  className="mt-1.5 w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] p-3 outline-none focus:border-[#242329]"
+                />
+              </label>
+
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  Categoria
+                  <select
+                    value={tenantForm.category}
+                    onChange={(e) => setTenantForm({ ...tenantForm, category: e.target.value })}
+                    className="mt-1.5 w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] p-3 outline-none"
+                  >
+                    <option value="Barbearia">Barbearia</option>
+                    <option value="Salão de Beleza">Salão de Beleza</option>
+                    <option value="Esmalteria / Nails">Esmalteria / Nails</option>
+                    <option value="Estética">Estética</option>
+                  </select>
+                </label>
+
+                <label className="block">
+                  Cidade
+                  <input
+                    value={tenantForm.city}
+                    onChange={(e) => setTenantForm({ ...tenantForm, city: e.target.value })}
+                    placeholder="São Paulo, SP"
+                    className="mt-1.5 w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] p-3 outline-none focus:border-[#242329]"
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  WhatsApp (com DDD)
+                  <input
+                    value={tenantForm.whatsapp}
+                    onChange={(e) => setTenantForm({ ...tenantForm, whatsapp: e.target.value })}
+                    required
+                    placeholder="5511999998888"
+                    className="mt-1.5 w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] p-3 outline-none focus:border-[#242329]"
+                  />
+                </label>
+
+                <label className="block">
+                  Chave Pix
+                  <input
+                    value={tenantForm.pix_key}
+                    onChange={(e) => setTenantForm({ ...tenantForm, pix_key: e.target.value })}
+                    placeholder="Chave Pix do comércio"
+                    className="mt-1.5 w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] p-3 outline-none focus:border-[#242329]"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <button type="submit" className="mt-6 w-full rounded-xl bg-[#242329] py-3 text-sm font-semibold text-white">
+              {editingTenant ? 'Salvar alterações' : 'Cadastrar comércio'}
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function NewServiceModal({ onClose, onSave }: { onClose: () => void; onSave: (service: Omit<Service, 'id'>) => void | Promise<void> }) { const [name, setName] = useState(''); const [duration, setDuration] = useState('45'); const [price, setPrice] = useState(''); const submit = (event: FormEvent) => { event.preventDefault(); if (name && price) onSave({ name, duration_minutes: Number(duration), price: Number(price.replace(',', '.')), active: true }); }; return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#202127]/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"><form onSubmit={submit} className="w-full max-w-md rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl"><div className="flex items-center justify-between"><div><h2 className="font-display text-xl font-semibold">Novo serviço</h2><p className="mt-1 text-xs text-[#a2a19b]">Adicione uma opção à sua vitrine.</p></div><button type="button" onClick={onClose} className="rounded-xl p-2 text-[#aaa9a3] hover:bg-[#f7f7f5]"><X size={18} /></button></div><label className="mt-6 block text-xs font-semibold">Nome do serviço<input value={name} onChange={(event) => setName(event.target.value)} required className="mt-2 w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] px-3 py-3 text-sm outline-none focus:border-[#242329]" placeholder="Ex: Corte infantil" /></label><div className="mt-4 grid grid-cols-2 gap-3"><label className="block text-xs font-semibold">Duração<select value={duration} onChange={(event) => setDuration(event.target.value)} className="mt-2 w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] px-3 py-3 text-sm outline-none"><option value="15">15 minutos</option><option value="30">30 minutos</option><option value="45">45 minutos</option><option value="60">60 minutos</option><option value="75">75 minutos</option></select></label><label className="block text-xs font-semibold">Preço<input value={price} onChange={(event) => setPrice(event.target.value)} required type="text" inputMode="decimal" className="mt-2 w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] px-3 py-3 text-sm outline-none focus:border-[#242329]" placeholder="45,00" /></label></div><button className="mt-6 w-full rounded-xl bg-[#242329] py-3 text-sm font-semibold text-white">Adicionar serviço</button></form></div>; }
