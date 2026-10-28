@@ -22,6 +22,7 @@ import {
   Search,
   Sparkles,
   Store,
+  Trash2,
   UsersRound,
   WalletCards,
   X,
