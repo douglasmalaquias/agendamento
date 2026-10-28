@@ -31,7 +31,7 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
   : null;
 
 // DEFINA AQUI O SEU E-MAIL DE SUPER ADMIN
-const SUPER_ADMIN_EMAIL = 'admin@marco.com';
+const SUPER_ADMIN_EMAIL = 'dgmalaquias29@gmail.com';
 
 // --- PALETA DE CORES (TEMAS) ---
 const THEME_STYLES: Record<string, { bg: string; cardBg: string; textPrimary: string; accent: string; buttonBg: string; name: string }> = {
