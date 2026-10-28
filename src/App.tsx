@@ -572,7 +572,7 @@ function AdminView({ changeView, openPublicPage }: { changeView: (view: View) =>
 
 function NewServiceModal({ onClose, onSave }: { onClose: () => void; onSave: (service: Omit<Service, 'id'>) => void | Promise<void> }) { const [name, setName] = useState(''); const [duration, setDuration] = useState('45'); const [price, setPrice] = useState(''); const submit = (event: FormEvent) => { event.preventDefault(); if (name && price) onSave({ name, duration_minutes: Number(duration), price: Number(price.replace(',', '.')), active: true }); }; return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#202127]/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"><form onSubmit={submit} className="w-full max-w-md rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl"><div className="flex items-center justify-between"><div><h2 className="font-display text-xl font-semibold">Novo serviço</h2><p className="mt-1 text-xs text-[#a2a19b]">Adicione uma opção à sua vitrine.</p></div><button type="button" onClick={onClose} className="rounded-xl p-2 text-[#aaa9a3] hover:bg-[#f7f7f5]"><X size={18} /></button></div><label className="mt-6 block text-xs font-semibold">Nome do serviço<input value={name} onChange={(event) => setName(event.target.value)} required className="mt-2 w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] px-3 py-3 text-sm outline-none focus:border-[#242329]" placeholder="Ex: Corte infantil" /></label><div className="mt-4 grid grid-cols-2 gap-3"><label className="block text-xs font-semibold">Duração<select value={duration} onChange={(event) => setDuration(event.target.value)} className="mt-2 w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] px-3 py-3 text-sm outline-none"><option value="15">15 minutos</option><option value="30">30 minutos</option><option value="45">45 minutos</option><option value="60">60 minutos</option><option value="75">75 minutos</option></select></label><label className="block text-xs font-semibold">Preço<input value={price} onChange={(event) => setPrice(event.target.value)} required type="text" inputMode="decimal" className="mt-2 w-full rounded-xl border border-[#e5e4de] bg-[#fafaf8] px-3 py-3 text-sm outline-none focus:border-[#242329]" placeholder="45,00" /></label></div><button className="mt-6 w-full rounded-xl bg-[#242329] py-3 text-sm font-semibold text-white">Adicionar serviço</button></form></div>; }
 
-function BookingPage({ tenant, services, professionals, onBack, notify }: { tenant: Tenant; services: Service[]; professionals: Professional[]; onBack: () => void; notify: (message: string) => void }) {
+function BookingPage({ tenant, services, professionals, onBack, notify }: { tenant: Tenant; services: Service[]; professionals: Professional[]; onBack: () => void; notify: (msg: string) => void }) {
   const [step, setStep] = useState(1);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(professionals[0] ?? null);
@@ -582,8 +582,42 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
   const [phone, setPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'local'>('local');
   const [pixCopied, setPixCopied] = useState(false);
-  const dates = [{ day: 'Hoje', date: '25', weekday: 'DOM' }, { day: 'Amanhã', date: '26', weekday: 'SEG' }, { day: 'Ter', date: '27', weekday: 'TER' }, { day: 'Qua', date: '28', weekday: 'QUA' }];
-  const times = ['09:00', '09:45', '10:30', '11:15', '13:30', '14:15', '15:00', '16:30'];
+  const [bookedAppointments, setBookedAppointments] = useState<string[]>([]);
+
+  const dates = [
+    { day: 'Hoje', date: '25', fullDate: '2026-10-25', weekday: 'DOM' },
+    { day: 'Amanhã', date: '26', fullDate: '2026-10-26', weekday: 'SEG' },
+    { day: 'Ter', date: '27', fullDate: '2026-10-27', weekday: 'TER' },
+  ];
+  
+  const allTimes = ['09:00', '09:45', '10:30', '11:15', '13:30', '14:15', '15:00', '16:30'];
+
+  // Carrega do Supabase os horários ocupados para o profissional e data selecionados
+  useEffect(() => {
+    if (!tenant || !selectedProfessional) return;
+    const selectedDateObj = dates.find(d => d.date === date);
+    const fullDateStr = selectedDateObj ? selectedDateObj.fullDate : `2026-10-${date}`;
+
+    const loadOccupiedTimes = async () => {
+      const client = supabase;
+      if (!client) return;
+      const { data } = await client
+        .from('marco_appointments')
+        .select('appointment_time')
+        .eq('tenant_id', tenant.id)
+        .eq('professional_id', selectedProfessional.id)
+        .eq('appointment_date', fullDateStr)
+        .neq('status', 'cancelled');
+
+      if (data) {
+        setBookedAppointments(data.map((a: any) => a.appointment_time));
+      }
+    };
+    void loadOccupiedTimes();
+  }, [tenant, selectedProfessional, date]);
+
+  // Filtra removendo os horários já agendados
+  const times = allTimes.filter(t => !bookedAppointments.includes(t));
 
   const pixKey = selectedProfessional?.pix_key || tenant.pix_key || '';
   const pixKeyTypeLabel: Record<string, string> = { telefone: 'Telefone', email: 'E-mail', cpf: 'CPF', aleatoria: 'Chave aleatória' };
@@ -596,22 +630,229 @@ function BookingPage({ tenant, services, professionals, onBack, notify }: { tena
     window.setTimeout(() => setPixCopied(false), 2200);
   };
 
+  // Função para criar o link do Google Calendar
+  const getGoogleCalendarUrl = () => {
+    if (!selectedService) return '';
+    const selectedDateObj = dates.find(d => d.date === date);
+    const dateStr = selectedDateObj ? selectedDateObj.fullDate.replace(/-/g, '') : `202610${date}`;
+    const timeStr = time.replace(':', '') + '00';
+    const startIso = `${dateStr}T${timeStr}`;
+
+    const title = encodeURIComponent(`${selectedService.name} - ${tenant.name}`);
+    const details = encodeURIComponent(`Profissional: ${selectedProfessional?.name}\nCliente: ${name}\nTel: ${phone}`);
+    const location = encodeURIComponent(tenant.city || 'São Paulo, SP');
+
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startIso}/${startIso}&details=${details}&location=${location}`;
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!name || !phone || !selectedService) return;
     const client = supabase;
+    
+    const selectedDateObj = dates.find(d => d.date === date);
+    const fullDateStr = selectedDateObj ? selectedDateObj.fullDate : `2026-10-${date}`;
+
     if (client && tenant.id !== fallbackTenant.id) {
-      const { error } = await client.from('marco_appointments').insert({ tenant_id: tenant.id, service_id: selectedService.id, professional_id: selectedProfessional?.id ?? null, customer_name: name, customer_phone: phone, appointment_date: `2026-10-${date}`, appointment_time: time, status: 'confirmed', payment_method: paymentMethod, payment_status: paymentMethod === 'pix' ? 'pending' : 'local' });
+      const { error } = await client.from('marco_appointments').insert({
+        tenant_id: tenant.id,
+        service_id: selectedService.id,
+        professional_id: selectedProfessional?.id ?? null,
+        customer_name: name,
+        customer_phone: phone,
+        appointment_date: fullDateStr,
+        appointment_time: time,
+        status: 'confirmed',
+        payment_method: paymentMethod,
+        payment_status: paymentMethod === 'pix' ? 'pending' : 'local'
+      });
       if (error) notify('Não foi possível salvar agora, mas você ainda pode enviar a mensagem');
     }
+
+    const calendarUrl = getGoogleCalendarUrl();
     const paymentLabel = paymentMethod === 'pix' ? 'Pagamento online via Pix' : 'Pagamento no local';
-    const pixLine = paymentMethod === 'pix' && pixKey ? `%0A*Pagamento:* Pix (chave: ${pixKey})` : `%0A*Pagamento:* No local`;
-    const message = `Olá, ${tenant.name}! Gostaria de confirmar meu agendamento.%0A%0A*Cliente:* ${name}%0A*Serviço:* ${selectedService.name}%0A*Profissional:* ${selectedProfessional?.name ?? 'Equipe'}%0A*Data:* ${date} de outubro%0A*Horário:* ${time}%0A*Telefone:* ${phone}%0A*Valor:* ${formatCurrency(servicePrice)}%0A*Forma de pagamento:* ${paymentLabel}${pixLine}`;
-    window.open(`https://wa.me/${tenant.whatsapp}?text=${message}`, '_blank', 'noopener,noreferrer');
+    const pixLine = paymentMethod === 'pix' && pixKey ? `\n*Pagamento:* Pix (chave: ${pixKey})` : '\n*Pagamento:* No local';
+    
+    const message = `Olá, ${tenant.name}! Gostaria de confirmar meu agendamento.\n\n` +
+      `*Cliente:* ${name}\n` +
+      `*Serviço:* ${selectedService.name}\n` +
+      `*Profissional:* ${selectedProfessional?.name ?? 'Não especificado'}\n` +
+      `*Data:* ${date} de outubro às ${time}\n` +
+      `*Valor:* R$ ${servicePrice.toFixed(2)}${pixLine}\n\n` +
+      `🗓️ *Adicionar ao Calendário:* ${calendarUrl}`;
+
+    window.open(`https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
     setStep(4);
   };
 
-  return <div className="min-h-screen bg-[#f4f1eb] pb-12"><header className="flex items-center justify-between border-b border-[#e2ddd3] bg-[#f8f6f1] px-5 py-4 md:px-10"><button onClick={onBack} className="flex items-center gap-2 text-xs font-semibold text-[#77736c]"><ArrowLeft size={16} />Área do comércio</button><div className="flex items-center gap-2"><img src="/logo.png" alt="Marcô" className="h-8 w-8 rounded-lg object-cover" /><span className="font-display text-lg font-semibold">Marcô<span className="text-[#e24768]">.</span></span></div><span className="w-24 text-right text-[10px] font-bold uppercase tracking-[0.12em] text-[#a39e94]">Agendamento</span></header><div className="mx-auto max-w-[620px] px-5 pt-10 md:pt-16"><div className="text-center"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#242329] text-white shadow-xl shadow-[#242329]/15"><Scissors size={25} /></div><p className="mt-5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#a06945]">{tenant.category}</p><h1 className="mt-2 font-display text-[30px] font-semibold tracking-[-0.04em] text-[#292722]">{tenant.name}</h1><p className="mt-2 text-sm text-[#969087]">Escolha um serviço e reserve seu momento.</p></div>{step < 4 && <div className="mx-auto mt-9 flex max-w-[390px] items-center justify-center gap-2"><StepNumber number={1} active={step >= 1} label="Serviço" /><div className="h-px w-10 bg-[#d8d1c5]" /><StepNumber number={2} active={step >= 2} label="Horário" /><div className="h-px w-10 bg-[#d8d1c5]" /><StepNumber number={3} active={step >= 3} label="Confirmar" /></div>}{step === 1 && <div className="mt-9 space-y-3">{services.map((service) => <button key={service.id} onClick={() => { setSelectedService(service); setStep(2); }} className="flex w-full items-center gap-4 rounded-2xl border border-[#e3ddd3] bg-[#fcfaf6] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#a06945] hover:shadow-lg hover:shadow-[#a06945]/5"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#f0e4d9] text-[#a06945]"><Scissors size={18} /></span><span className="flex-1"><strong className="block font-display text-base font-semibold text-[#37332d]">{service.name}</strong><small className="mt-1 flex items-center gap-1 text-xs text-[#9a948b]"><Clock3 size={13} />{service.duration_minutes} minutos</small></span><span className="text-sm font-bold text-[#37332d]">{formatCurrency(service.price)}</span><ArrowRight size={17} className="text-[#b4aea4]" /></button>)}</div>}{step === 2 && <div className="mt-9 rounded-2xl border border-[#e3ddd3] bg-[#fcfaf6] p-5"><button onClick={() => setStep(1)} className="mb-6 flex items-center gap-1 text-xs font-semibold text-[#a06945]"><ArrowLeft size={14} /> Trocar serviço</button><div className="rounded-xl bg-[#f3eee6] p-3"><p className="text-xs text-[#9a948b]">Você escolheu</p><p className="mt-1 font-display text-base font-semibold">{selectedService?.name} <span className="font-sans text-sm text-[#a06945]">· {formatCurrency(selectedService?.price ?? 0)}</span></p></div><p className="mt-6 text-sm font-semibold text-[#37332d]">Escolha a profissional</p><div className="mt-3 grid grid-cols-3 gap-2">{professionals.map((professional) => <button key={professional.id} onClick={() => setSelectedProfessional(professional)} className={`rounded-xl border p-2 text-left ${selectedProfessional?.id === professional.id ? 'border-[#a06945] bg-[#f3e4d9]' : 'border-[#e3ddd3] bg-white'}`}><span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-[#242329] text-[10px] font-bold text-white">{professional.photo_url ? <img src={professional.photo_url} alt={professional.name} className="h-full w-full object-cover" /> : professional.name.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span><strong className="mt-2 block truncate text-xs text-[#37332d]">{professional.name.split(' ')[0]}</strong><small className="mt-0.5 block truncate text-[10px] text-[#9a948b]">{professional.role}</small></button>)}</div><p className="mt-6 text-sm font-semibold text-[#37332d]">Escolha o dia</p><div className="mt-3 grid grid-cols-4 gap-2">{dates.map((item) => <button key={item.date} onClick={() => setDate(item.date)} className={`rounded-xl border py-3 ${date === item.date ? 'border-[#242329] bg-[#242329] text-white' : 'border-[#e3ddd3] bg-white text-[#77736c]'}`}><span className="block text-[10px] font-bold uppercase">{item.weekday}</span><strong className="mt-1 block font-display text-lg">{item.date}</strong><small className="block text-[10px]">{item.day}</small></button>)}</div><p className="mt-6 text-sm font-semibold text-[#37332d]">Escolha o horário</p><div className="mt-3 grid grid-cols-4 gap-2">{times.map((item) => <button key={item} onClick={() => setTime(item)} className={`rounded-lg border py-2.5 text-xs font-semibold ${time === item ? 'border-[#a06945] bg-[#a06945] text-white' : 'border-[#e3ddd3] bg-white text-[#77736c] hover:border-[#a06945]'}`}>{item}</button>)}</div><button onClick={() => setStep(3)} className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-[#242329] py-3 text-sm font-semibold text-white">Continuar <ArrowRight size={15} /></button></div>}{step === 3 && <form onSubmit={submit} className="mt-9 rounded-2xl border border-[#e3ddd3] bg-[#fcfaf6] p-5"><button type="button" onClick={() => setStep(2)} className="mb-6 flex items-center gap-1 text-xs font-semibold text-[#a06945]"><ArrowLeft size={14} /> Voltar aos horários</button><div className="flex items-center gap-3 rounded-xl bg-[#f3eee6] p-4"><CalendarDays size={18} className="text-[#a06945]" /><div><p className="text-xs text-[#9a948b]">Seu horário</p><p className="mt-1 text-sm font-semibold">{selectedService?.name} · {date} de outubro às {time}</p></div></div><div className="mt-4 rounded-2xl border border-[#e8dec9] bg-white p-5"><div className="flex items-center justify-between"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f3e9d9] text-[#a06945]"><WalletCards size={18} /></span><span className="rounded-full bg-[#f7f0e6] px-2.5 py-1 text-[10px] font-bold text-[#a06945]">VALOR DO SERVIÇO</span></div><p className="mt-4 text-xs text-[#9a948b]">{selectedService?.name} · {selectedService?.duration_minutes} min</p><p className="mt-1 font-display text-[34px] font-semibold tracking-tight text-[#37332d]">{formatCurrency(servicePrice)}</p><p className="mt-1 text-[11px] text-[#aaa39a]">{selectedProfessional ? `Atendido por ${selectedProfessional.name}` : 'Atendimento pela equipe'}</p></div><p className="mt-6 text-sm font-semibold text-[#37332d]">Forma de pagamento</p><div className="mt-3 grid gap-2"><button type="button" onClick={() => setPaymentMethod('pix')} className={`flex items-start gap-3 rounded-xl border p-4 text-left transition ${paymentMethod === 'pix' ? 'border-[#a06945] bg-[#f7eee2] ring-1 ring-[#a06945]/20' : 'border-[#e3ddd3] bg-white hover:border-[#c4b39a]'}`}><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${paymentMethod === 'pix' ? 'bg-[#a06945] text-white' : 'bg-[#f3eee6] text-[#a06945]'}`}><QrCode size={18} /></span><span className="flex-1"><strong className="block text-sm font-semibold text-[#37332d]">Pagar agora via Pix</strong><small className="mt-0.5 block text-[11px] text-[#9a948b]">Use a chave Pix cadastrada para transferir o valor do serviço.</small>{paymentMethod === 'pix' && pixKey && <span className="mt-3 block rounded-lg bg-[#fcfaf6] p-3"><span className="block text-[10px] font-bold uppercase tracking-wide text-[#aaa39a]">Chave Pix ({pixKeyTypeLabel[tenant.pix_key_type] ?? 'Pix'})</span><span className="mt-1 flex items-center gap-2 break-all text-sm font-semibold text-[#37332d]">{pixKey}<button type="button" onClick={copyPix} className="ml-1 flex items-center gap-1 rounded-md bg-[#f3eee6] px-2 py-1 text-[10px] font-bold text-[#a06945] hover:bg-[#ece0d0]">{pixCopied ? <><Check size={11} />Copiada</> : <><Copy size={11} />Copiar</>}</button></span></span>}{paymentMethod === 'pix' && !pixKey && <span className="mt-2 block rounded-lg bg-[#fbf0db] p-2 text-[11px] font-semibold text-[#ad813c]">Este comércio ainda não cadastrou uma chave Pix. Escolha pagar no local.</span>}</span></button><button type="button" onClick={() => setPaymentMethod('local')} className={`flex items-start gap-3 rounded-xl border p-4 text-left transition ${paymentMethod === 'local' ? 'border-[#a06945] bg-[#f7eee2] ring-1 ring-[#a06945]/20' : 'border-[#e3ddd3] bg-white hover:border-[#c4b39a]'}`}><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${paymentMethod === 'local' ? 'bg-[#a06945] text-white' : 'bg-[#f3eee6] text-[#a06945]'}`}><WalletCards size={18} /></span><span className="flex-1"><strong className="block text-sm font-semibold text-[#37332d]">Pagar no local</strong><small className="mt-0.5 block text-[11px] text-[#9a948b]">Combine o pagamento direto com o comércio no dia do atendimento.</small></span></button></div><p className="mt-7 text-sm font-semibold text-[#37332d]">Seus dados</p><label className="mt-3 block text-xs font-semibold text-[#625d55]">Nome completo<input value={name} onChange={(event) => setName(event.target.value)} required className="mt-2 w-full rounded-xl border border-[#e3ddd3] bg-white px-3 py-3 text-sm outline-none focus:border-[#a06945]" placeholder="Como podemos te chamar?" /></label><label className="mt-3 block text-xs font-semibold text-[#625d55]">WhatsApp<input value={phone} onChange={(event) => setPhone(event.target.value)} required className="mt-2 w-full rounded-xl border border-[#e3ddd3] bg-white px-3 py-3 text-sm outline-none focus:border-[#a06945]" placeholder="(11) 99999-9999" /></label><button className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#3c8b54] py-3 text-sm font-semibold text-white shadow-lg shadow-[#3c8b54]/15">Confirmar pelo WhatsApp <ArrowRight size={15} /></button><p className="mt-3 text-center text-[10px] text-[#a39d93]">Você será direcionado para o WhatsApp do comércio.</p></form>}{step === 4 && <div className="mt-10 rounded-3xl border border-[#dfd8ce] bg-[#fcfaf6] p-8 text-center"><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#dceedd] text-[#5d9167]"><Check size={25} /></span><h2 className="mt-5 font-display text-2xl font-semibold text-[#37332d]">Quase tudo pronto!</h2><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[#938c82]">Sua mensagem foi preparada com o valor de <strong className="font-semibold text-[#37332d]">{formatCurrency(servicePrice)}</strong> e a forma de pagamento <strong className="font-semibold text-[#37332d]">{paymentMethod === 'pix' ? 'Pix online' : 'no local'}</strong>. Envie pelo WhatsApp para confirmar com {tenant.name}.</p><button onClick={onBack} className="mt-7 rounded-xl bg-[#242329] px-5 py-3 text-xs font-semibold text-white">Voltar para o início</button></div>}<p className="mt-12 text-center text-[11px] text-[#a39e94]">Agendamento fácil com <strong className="font-semibold text-[#77736c]">Marcô</strong></p></div></div>;
+  return (
+    <div className="min-h-screen bg-[#f4f1eb] pb-12">
+      <header className="flex items-center justify-between border-b border-[#e2ddd3] bg-[#f8f6f1] px-5 py-4">
+        <button onClick={onBack} className="text-xs font-semibold text-[#666] hover:underline">← Voltar</button>
+        <span className="font-display font-bold text-[#242329]">{tenant.name}</span>
+        <span className="text-xs text-[#888]">{tenant.category}</span>
+      </header>
+
+      <main className="mx-auto max-w-xl px-4 pt-6">
+        {step < 4 && (
+          <div className="mb-6 flex justify-between border-b border-[#e2ddd3] pb-3 text-xs">
+            <span className={step === 1 ? 'font-bold text-[#805d4e]' : 'text-[#888]'}>1. Serviço</span>
+            <span className={step === 2 ? 'font-bold text-[#805d4e]' : 'text-[#888]'}>2. Data e Profissional</span>
+            <span className={step === 3 ? 'font-bold text-[#805d4e]' : 'text-[#888]'}>3. Pagamento e Dados</span>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className="space-y-3">
+            <h2 className="font-display text-lg font-bold">Escolha o serviço</h2>
+            {services.map((s) => (
+              <div
+                key={s.id}
+                onClick={() => { setSelectedService(s); setStep(2); }}
+                className="flex cursor-pointer items-center justify-between rounded-2xl border border-[#e2ddd3] bg-white p-4 transition-all hover:border-[#805d4e]"
+              >
+                <div>
+                  <p className="font-bold text-[#242329]">{s.name}</p>
+                  <p className="text-xs text-[#777]">{s.duration_minutes} min</p>
+                </div>
+                <p className="font-bold text-[#805d4e]">R$ {s.price.toFixed(2)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-5">
+            <div>
+              <h3 className="mb-2 text-xs font-bold uppercase text-[#777]">Profissional</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {professionals.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setSelectedProfessional(p)}
+                    className={`rounded-xl border p-3 text-left text-xs ${selectedProfessional?.id === p.id ? 'border-[#805d4e] bg-[#805d4e] text-white' : 'border-[#e2ddd3] bg-white text-[#333]'}`}
+                  >
+                    <p className="font-bold">{p.name}</p>
+                    <p className="opacity-80">{p.role}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-xs font-bold uppercase text-[#777]">Data</h3>
+              <div className="grid grid-cols-3 gap-2">
+                {dates.map((d) => (
+                  <button
+                    key={d.date}
+                    type="button"
+                    onClick={() => setDate(d.date)}
+                    className={`rounded-xl border p-3 text-center text-xs ${date === d.date ? 'border-[#805d4e] bg-[#805d4e] text-white' : 'border-[#e2ddd3] bg-white text-[#333]'}`}
+                  >
+                    <p className="font-bold">{d.day}</p>
+                    <p className="opacity-80">{d.date} Out ({d.weekday})</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-xs font-bold uppercase text-[#777]">Horários Disponíveis</h3>
+              {times.length === 0 ? (
+                <p className="text-xs text-[#d94e70] p-2 bg-white rounded-xl border border-[#e2ddd3]">Nenhum horário disponível para este profissional nesta data.</p>
+              ) : (
+                <div className="grid grid-cols-4 gap-2">
+                  {times.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setTime(t)}
+                      className={`rounded-xl border p-2 text-center text-xs ${time === t ? 'border-[#242329] bg-[#242329] text-white' : 'border-[#e2ddd3] bg-white text-[#333]'}`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => setStep(3)}
+              className="mt-4 w-full rounded-xl bg-[#805d4e] py-3 text-sm font-bold text-white shadow-md"
+            >
+              Avançar para confirmação →
+            </button>
+          </div>
+        )}
+
+        {step === 3 && (
+          <form onSubmit={submit} className="space-y-4">
+            <div className="rounded-2xl border border-[#e2ddd3] bg-white p-4 text-xs space-y-1">
+              <p className="font-bold text-sm text-[#242329]">{selectedService?.name}</p>
+              <p className="text-[#666]">Com {selectedProfessional?.name} em {date} de outubro às {time}</p>
+              <p className="font-bold text-[#805d4e] text-sm pt-1">R$ {servicePrice.toFixed(2)}</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-[#555]">
+                Forma de Pagamento
+                <select value={paymentMethod} onChange={(e: any) => setPaymentMethod(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e2ddd3] p-3 text-xs outline-none">
+                  <option value="local">Pagar no local</option>
+                  <option value="pix">Pagar agora via Pix</option>
+                </select>
+              </label>
+
+              {paymentMethod === 'pix' && (
+                <div className="rounded-xl border border-[#e2ddd3] bg-white p-3 text-xs space-y-2">
+                  <p className="font-bold">Chave Pix para pagamento:</p>
+                  <p className="bg-[#f4f1eb] p-2 rounded-lg font-mono text-center select-all">{pixKey || 'Chave não cadastrada'}</p>
+                  <button type="button" onClick={copyPix} className="w-full rounded-lg bg-[#242329] py-2 text-white font-semibold">
+                    {pixCopied ? 'Chave copiada! ✓' : 'Copiar chave Pix'}
+                  </button>
+                </div>
+              )}
+
+              <label className="block text-xs font-bold text-[#555]">
+                Seu Nome Completo
+                <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Digite seu nome" className="mt-1 w-full rounded-xl border border-[#e2ddd3] p-3 text-xs outline-none" />
+              </label>
+
+              <label className="block text-xs font-bold text-[#555]">
+                Seu WhatsApp
+                <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 99999-9999" className="mt-1 w-full rounded-xl border border-[#e2ddd3] p-3 text-xs outline-none" />
+              </label>
+            </div>
+
+            <button type="submit" className="w-full rounded-xl bg-[#2e7d32] py-3.5 text-sm font-bold text-white shadow-lg">
+              Confirmar pelo WhatsApp →
+            </button>
+          </form>
+        )}
+
+        {step === 4 && (
+          <div className="rounded-2xl border border-[#e2ddd3] bg-white p-6 text-center space-y-4">
+            <div className="text-4xl">🎉</div>
+            <h2 className="font-display text-xl font-bold text-[#242329]">Agendamento Solicitado!</h2>
+            <p className="text-xs text-[#666]">Você foi redirecionado para o WhatsApp da {tenant.name} para concluir a confirmação.</p>
+            
+            <a
+              href={getGoogleCalendarUrl()}
+              target="_blank"
+              rel="noreferrer"
+              className="block w-full rounded-xl border border-[#e2ddd3] bg-[#f8f6f1] py-3 text-xs font-bold text-[#242329] hover:bg-[#e2ddd3]"
+            >
+              📅 Adicionar evento ao Google Calendar
+            </a>
+
+            <button onClick={() => setStep(1)} className="text-xs text-[#805d4e] underline font-semibold">
+              Fazer novo agendamento
+            </button>
+          </div>
+        )}
+      </main>
+    </div>
+  );
 }
 function StepNumber({ number, active, label }: { number: number; active: boolean; label: string }) { return <div className="flex flex-col items-center gap-1.5"><span className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold ${active ? 'bg-[#242329] text-white' : 'bg-[#e2ddd4] text-[#989188]'}`}>{number}</span><span className={`text-[10px] font-semibold ${active ? 'text-[#4c4740]' : 'text-[#aaa39a]'}`}>{label}</span></div>; }
 
