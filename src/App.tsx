@@ -14,7 +14,8 @@ import {
   X,
   Users,
   CheckCircle2,
-  ExternalLink
+  ExternalLink,
+  Palette
 } from 'lucide-react';
 
 // --- CONFIGURAÇÃO DO SUPABASE ---
@@ -24,6 +25,14 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 export const supabase = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
+
+// --- PALETA DE CORES (TEMAS) ---
+const THEME_STYLES: Record<string, { bg: string; cardBg: string; textPrimary: string; accent: string; buttonBg: string; name: string }> = {
+  coffee: { name: '🟤 Café / Moka', bg: '#f4f1eb', cardBg: '#ffffff', textPrimary: '#242329', accent: '#805d4e', buttonBg: '#805d4e' },
+  dark: { name: '⬛ Dark / Grafite', bg: '#18181b', cardBg: '#27272a', textPrimary: '#ffffff', accent: '#a1a1aa', buttonBg: '#3f3f46' },
+  blue: { name: '🔵 Azul Profundo', bg: '#f0f4f8', cardBg: '#ffffff', textPrimary: '#0f172a', accent: '#2563eb', buttonBg: '#2563eb' },
+  emerald: { name: '🟢 Verde Esmeralda', bg: '#f0fdf4', cardBg: '#ffffff', textPrimary: '#064e3b', accent: '#059669', buttonBg: '#059669' },
+};
 
 // --- TIPOS DE DADOS ---
 interface Tenant {
@@ -81,7 +90,7 @@ const fallbackTenant: Tenant = {
   phone: '(11) 99999-9999',
   whatsapp: '5511999999999',
   city: 'São Paulo, SP',
-  theme: 'dark',
+  theme: 'coffee',
   pix_key: '11999999999',
   pix_key_type: 'telefone'
 };
@@ -146,7 +155,7 @@ export default function App() {
   );
 }
 
-// --- VISÃO 1: SUPER ADMIN ---
+// --- VISÃO 1: SUPER ADMIN (MODAL OTIMIZADA PARA TELEMÓVEL) ---
 function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openPublicPage: (slug: string) => void; openTenantDashboard: (tenant: Tenant) => void; notify: (msg: string) => void }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [search, setSearch] = useState('');
@@ -159,6 +168,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
   const [formCategory, setFormCategory] = useState('Barbearia');
   const [formWhatsapp, setFormWhatsapp] = useState('');
   const [formCity, setFormCity] = useState('São Paulo, SP');
+  const [formTheme, setFormTheme] = useState('coffee');
 
   const loadAdminData = async () => {
     setLoading(true);
@@ -181,6 +191,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
     setFormCategory('Barbearia');
     setFormWhatsapp('');
     setFormCity('São Paulo, SP');
+    setFormTheme('coffee');
     setShowModal(true);
   };
 
@@ -191,6 +202,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
     setFormCategory(t.category);
     setFormWhatsapp(t.whatsapp);
     setFormCity(t.city || 'São Paulo, SP');
+    setFormTheme(t.theme || 'coffee');
     setShowModal(true);
   };
 
@@ -207,7 +219,8 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
       slug: formSlug.toLowerCase().trim().replace(/\s+/g, '-'),
       category: formCategory,
       whatsapp: formWhatsapp.replace(/\D/g, ''),
-      city: formCity
+      city: formCity,
+      theme: formTheme
     };
 
     if (editingTenant) {
@@ -255,44 +268,44 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
         </nav>
       </aside>
 
-      <main className="flex-1 p-6 md:p-10">
-        <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <main className="flex-1 p-4 md:p-10">
+        <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="font-display text-3xl font-bold">Super Admin</h1>
-            <p className="text-sm text-[#6c757d]">Gerencie os estabelecimentos da plataforma Marcô.</p>
+            <h1 className="font-display text-2xl md:text-3xl font-bold">Super Admin</h1>
+            <p className="text-xs md:text-sm text-[#6c757d]">Gerencie os estabelecimentos da plataforma Marcô.</p>
           </div>
           <button
             onClick={handleOpenCreateModal}
-            className="flex items-center gap-2 rounded-xl bg-[#242329] px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-[#343a40]"
+            className="flex items-center justify-center gap-2 rounded-xl bg-[#242329] px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-[#343a40] w-full md:w-auto"
           >
             <Plus size={18} /> Novo Comércio
           </button>
         </header>
 
-        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border border-[#e9ecef] bg-white p-5 shadow-sm">
+        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="rounded-2xl border border-[#e9ecef] bg-white p-4 md:p-5 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[#6c757d]">Comércios Ativos</span>
-              <Store size={18} className="text-[#6c757d]" />
+              <span className="text-xs font-semibold text-[#6c757d]">Comércios</span>
+              <Store size={16} className="text-[#6c757d]" />
             </div>
-            <p className="mt-2 text-2xl font-bold">{tenants.length}</p>
+            <p className="mt-1 md:mt-2 text-xl md:text-2xl font-bold">{tenants.length}</p>
           </div>
-          <div className="rounded-2xl border border-[#e9ecef] bg-white p-5 shadow-sm">
+          <div className="rounded-2xl border border-[#e9ecef] bg-white p-4 md:p-5 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[#6c757d]">Mensalidades em Dia</span>
-              <CheckCircle2 size={18} className="text-[#2e7d32]" />
+              <span className="text-xs font-semibold text-[#6c757d]">Mensalidades</span>
+              <CheckCircle2 size={16} className="text-[#2e7d32]" />
             </div>
-            <p className="mt-2 text-2xl font-bold text-[#2e7d32]">100%</p>
+            <p className="mt-1 md:mt-2 text-xl md:text-2xl font-bold text-[#2e7d32]">100%</p>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#e9ecef] bg-white p-6 shadow-sm">
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative flex-1 max-w-md">
+        <div className="rounded-2xl border border-[#e9ecef] bg-white p-4 md:p-6 shadow-sm">
+          <div className="mb-6">
+            <div className="relative w-full">
               <Search className="absolute left-3.5 top-3 text-[#adb5bd]" size={18} />
               <input
                 type="text"
-                placeholder="Buscar por nome, categoria ou bairro..."
+                placeholder="Buscar comércio..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full rounded-xl border border-[#e9ecef] bg-[#f8f9fa] py-2.5 pl-10 pr-4 text-sm outline-none focus:border-[#242329]"
@@ -305,83 +318,133 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
           ) : filteredTenants.length === 0 ? (
             <p className="py-8 text-center text-sm text-[#6c757d]">Nenhum comércio encontrado.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-[#e9ecef] text-xs font-semibold text-[#6c757d]">
-                    <th className="pb-3">COMÉRCIO</th>
-                    <th className="pb-3">CIDADE / BAIRRO</th>
-                    <th className="pb-3">WHATSAPP</th>
-                    <th className="pb-3">LINK PÚBLICO</th>
-                    <th className="pb-3 text-right">AÇÕES</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#e9ecef]">
-                  {filteredTenants.map((t) => (
-                    <tr key={t.id} className="hover:bg-[#f8f9fa]">
-                      <td className="py-4 font-semibold">
-                        <button onClick={() => openTenantDashboard(t)} className="text-left hover:underline">
-                          <p className="text-sm font-bold text-[#212529]">{t.name}</p>
-                          <span className="text-xs font-normal text-[#6c757d]">{t.category}</span>
-                        </button>
-                      </td>
-                      <td className="py-4 text-[#495057]">{t.city || 'São Paulo, SP'}</td>
-                      <td className="py-4 text-[#495057]">{t.whatsapp}</td>
-                      <td className="py-4">
+            <>
+              {/* VISTA EM CARDS NO TELEMÓVEL */}
+              <div className="grid grid-cols-1 gap-3 md:hidden">
+                {filteredTenants.map((t) => (
+                  <div key={t.id} className="rounded-xl border border-[#e9ecef] p-4 bg-white space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-bold text-base text-[#212529]">{t.name}</h3>
+                        <span className="text-xs text-[#6c757d]">{t.category} · {t.city || 'São Paulo, SP'}</span>
+                      </div>
+                      <span className="text-xs bg-[#f8f9fa] border border-[#e9ecef] px-2 py-1 rounded-md font-mono">{t.whatsapp}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-[#f8f9fa]">
+                      <button
+                        onClick={() => openPublicPage(t.slug)}
+                        className="flex items-center gap-1 text-xs font-bold text-[#805d4e]"
+                      >
+                        <Link2 size={14} /> /{t.slug}
+                      </button>
+
+                      <div className="flex items-center gap-2">
                         <button
-                          onClick={() => openPublicPage(t.slug)}
-                          className="flex items-center gap-1 text-xs font-semibold text-[#805d4e] hover:underline"
+                          onClick={() => openTenantDashboard(t)}
+                          className="rounded-lg bg-[#242329] px-3 py-1.5 text-xs font-bold text-white"
                         >
-                          <Link2 size={14} /> /{t.slug}
+                          Entrar
                         </button>
-                      </td>
-                      <td className="py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => openTenantDashboard(t)}
-                            className="rounded-lg bg-[#f8f9fa] border border-[#e9ecef] px-2.5 py-1 text-xs font-semibold text-[#212529] hover:bg-[#e9ecef]"
-                          >
-                            Entrar
-                          </button>
-                          <button
-                            onClick={() => handleOpenEditModal(t)}
-                            className="rounded-lg p-2 text-[#6c757d] hover:bg-[#e9ecef] hover:text-[#212529]"
-                            title="Editar"
-                          >
-                            <Pencil size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTenant(t.id, t.name)}
-                            className="rounded-lg p-2 text-[#d94e70] hover:bg-[#fde8ed]"
-                            title="Excluir"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
+                        <button
+                          onClick={() => handleOpenEditModal(t)}
+                          className="rounded-lg p-1.5 text-[#6c757d] bg-[#f8f9fa]"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTenant(t.id, t.name)}
+                          className="rounded-lg p-1.5 text-[#d94e70] bg-[#fde8ed]"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* VISTA EM TABELA NO COMPUTADOR */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-[#e9ecef] text-xs font-semibold text-[#6c757d]">
+                      <th className="pb-3">COMÉRCIO</th>
+                      <th className="pb-3">CIDADE / BAIRRO</th>
+                      <th className="pb-3">WHATSAPP</th>
+                      <th className="pb-3">LINK PÚBLICO</th>
+                      <th className="pb-3 text-right">AÇÕES</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-[#e9ecef]">
+                    {filteredTenants.map((t) => (
+                      <tr key={t.id} className="hover:bg-[#f8f9fa]">
+                        <td className="py-4 font-semibold">
+                          <button onClick={() => openTenantDashboard(t)} className="text-left hover:underline">
+                            <p className="text-sm font-bold text-[#212529]">{t.name}</p>
+                            <span className="text-xs font-normal text-[#6c757d]">{t.category}</span>
+                          </button>
+                        </td>
+                        <td className="py-4 text-[#495057]">{t.city || 'São Paulo, SP'}</td>
+                        <td className="py-4 text-[#495057]">{t.whatsapp}</td>
+                        <td className="py-4">
+                          <button
+                            onClick={() => openPublicPage(t.slug)}
+                            className="flex items-center gap-1 text-xs font-semibold text-[#805d4e] hover:underline"
+                          >
+                            <Link2 size={14} /> /{t.slug}
+                          </button>
+                        </td>
+                        <td className="py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => openTenantDashboard(t)}
+                              className="rounded-lg bg-[#f8f9fa] border border-[#e9ecef] px-2.5 py-1 text-xs font-semibold text-[#212529] hover:bg-[#e9ecef]"
+                            >
+                              Entrar
+                            </button>
+                            <button
+                              onClick={() => handleOpenEditModal(t)}
+                              className="rounded-lg p-2 text-[#6c757d] hover:bg-[#e9ecef] hover:text-[#212529]"
+                              title="Editar"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTenant(t.id, t.name)}
+                              className="rounded-lg p-2 text-[#d94e70] hover:bg-[#fde8ed]"
+                              title="Excluir"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </main>
 
+      {/* MODAL RESPONSIVA COM SELEÇÃO DE CORES EM DESTAQUE */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-display text-lg font-bold">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 overflow-y-auto">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl my-auto">
+            <div className="mb-3 flex items-center justify-between border-b pb-2">
+              <h2 className="font-display text-base font-bold">
                 {editingTenant ? 'Editar Comércio' : 'Novo Comércio'}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-[#6c757d] hover:text-[#212529]">
+              <button onClick={() => setShowModal(false)} className="text-[#6c757d]">
                 <X size={20} />
               </button>
             </div>
-            <form onSubmit={handleSaveTenant} className="space-y-4">
+            
+            <form onSubmit={handleSaveTenant} className="space-y-3 text-xs">
               <div>
-                <label className="block text-xs font-semibold text-[#495057]">Nome do Estabelecimento</label>
+                <label className="block font-semibold text-[#495057]">Nome do Estabelecimento</label>
                 <input
                   required
                   type="text"
@@ -391,57 +454,107 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
                     if (!editingTenant) setFormSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'));
                   }}
                   placeholder="Ex: Studio Elena Nails"
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none focus:border-[#242329]"
+                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#495057]">Link de Acesso (Slug)</label>
-                <input
-                  required
-                  type="text"
-                  value={formSlug}
-                  onChange={(e) => setFormSlug(e.target.value)}
-                  placeholder="ex: studio-elena-nails"
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none focus:border-[#242329]"
-                />
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-[#495057]">Link (Slug)</label>
+                  <input
+                    required
+                    type="text"
+                    value={formSlug}
+                    onChange={(e) => setFormSlug(e.target.value)}
+                    placeholder="studio-elena"
+                    className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#495057]">Categoria</label>
+                  <select
+                    value={formCategory}
+                    onChange={(e) => setFormCategory(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none"
+                  >
+                    <option value="Barbearia">Barbearia</option>
+                    <option value="Esmalteria / Nails">Esmalteria / Nails</option>
+                    <option value="Estética">Estética</option>
+                    <option value="Salão de Beleza">Salão de Beleza</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#495057]">Categoria</label>
-                <select
-                  value={formCategory}
-                  onChange={(e) => setFormCategory(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none focus:border-[#242329]"
-                >
-                  <option value="Barbearia">Barbearia</option>
-                  <option value="Esmalteria / Nails">Esmalteria / Nails</option>
-                  <option value="Estética">Estética</option>
-                  <option value="Salão de Beleza">Salão de Beleza</option>
-                </select>
+
+              {/* PAINEL DE SELEÇÃO DE CORES DA PÁGINA */}
+              <div className="bg-[#f8f9fa] p-3 rounded-xl border border-[#e9ecef]">
+                <label className="block font-bold text-[#212529] mb-2 flex items-center gap-1">
+                  <Palette size={14} className="text-[#805d4e]" /> Cor da Página do Cliente
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormTheme('coffee')}
+                    className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'coffee' ? 'border-2 border-[#242329] bg-white shadow-sm' : 'border-[#e9ecef] bg-[#f4f1eb]'}`}
+                  >
+                    <span>🟤 Café</span>
+                    {formTheme === 'coffee' && <CheckCircle2 size={14} className="text-[#242329]" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormTheme('dark')}
+                    className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'dark' ? 'border-2 border-[#242329] bg-[#27272a] text-white shadow-sm' : 'border-[#e9ecef] bg-[#18181b] text-white'}`}
+                  >
+                    <span>⬛ Dark</span>
+                    {formTheme === 'dark' && <CheckCircle2 size={14} className="text-white" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormTheme('blue')}
+                    className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'blue' ? 'border-2 border-[#242329] bg-white shadow-sm' : 'border-[#e9ecef] bg-[#f0f4f8]'}`}
+                  >
+                    <span>🔵 Azul</span>
+                    {formTheme === 'blue' && <CheckCircle2 size={14} className="text-[#242329]" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormTheme('emerald')}
+                    className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'emerald' ? 'border-2 border-[#242329] bg-white shadow-sm' : 'border-[#e9ecef] bg-[#f0fdf4]'}`}
+                  >
+                    <span>🟢 Verde</span>
+                    {formTheme === 'emerald' && <CheckCircle2 size={14} className="text-[#242329]" />}
+                  </button>
+                </div>
               </div>
+
               <div>
-                <label className="block text-xs font-semibold text-[#495057]">WhatsApp (Com DDD)</label>
+                <label className="block font-semibold text-[#495057]">WhatsApp (Com DDD)</label>
                 <input
                   required
                   type="text"
                   value={formWhatsapp}
                   onChange={(e) => setFormWhatsapp(e.target.value)}
                   placeholder="11999999999"
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none focus:border-[#242329]"
+                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none"
                 />
               </div>
+
               <div>
-                <label className="block text-xs font-semibold text-[#495057]">Bairro e Cidade</label>
+                <label className="block font-semibold text-[#495057]">Bairro e Cidade</label>
                 <input
                   type="text"
                   value={formCity}
                   onChange={(e) => setFormCity(e.target.value)}
                   placeholder="São Paulo, SP - Jardins"
-                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none focus:border-[#242329]"
+                  className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none"
                 />
               </div>
+
               <button
                 type="submit"
-                className="mt-6 w-full rounded-xl bg-[#242329] py-3 text-sm font-bold text-white hover:bg-[#343a40]"
+                className="mt-4 w-full rounded-xl bg-[#242329] py-3 text-xs font-bold text-white shadow-md hover:bg-[#343a40]"
               >
                 {editingTenant ? 'Salvar Alterações' : 'Cadastrar Comércio'}
               </button>
@@ -453,14 +566,13 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, notify }: { openP
   );
 }
 
-// --- VISÃO 2: DASHBOARD DO ESTABELECIMENTO COM NAVEGAÇÃO MÓVEL NO TOPO ---
+// --- VISÃO 2: DASHBOARD DO ESTABELECIMENTO ---
 function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: Tenant; onBack: () => void; notify: (msg: string) => void; openPublicPage: (slug: string) => void }) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'professionals' | 'appointments'>('dashboard');
   const [services, setServices] = useState<Service[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
 
-  // Modais de Cadastro
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [serviceName, setServiceName] = useState('');
   const [serviceDuration, setServiceDuration] = useState('45');
@@ -488,7 +600,6 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
     void loadTenantDetails();
   }, [tenant]);
 
-  // Salvar Novo Serviço
   const handleSaveService = async (e: FormEvent) => {
     e.preventDefault();
     const client = supabase;
@@ -512,7 +623,6 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
     }
   };
 
-  // Salvar Novo Profissional
   const handleSaveProf = async (e: FormEvent) => {
     e.preventDefault();
     const client = supabase;
@@ -559,7 +669,6 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8f9fa]">
-      {/* MENU LATERAL (Aparece no PC) */}
       <aside className="w-64 border-r border-[#e9ecef] bg-white p-6 hidden md:block">
         <button onClick={onBack} className="mb-6 flex items-center gap-2 text-xs font-semibold text-[#6c757d] hover:text-[#212529]">
           <ArrowLeft size={16} /> Voltar ao Super Admin
@@ -596,12 +705,11 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
         </nav>
       </aside>
 
-      {/* MENU SUPERIOR EM ABAS (Aparece no Telemóvel) */}
       <div className="md:hidden border-b border-[#e9ecef] bg-white p-4 space-y-3">
         <button onClick={onBack} className="flex items-center gap-1 text-xs font-semibold text-[#6c757d]">
           <ArrowLeft size={14} /> Voltar ao Super Admin
         </button>
-        <div className="flex grid grid-cols-4 gap-1 bg-[#f8f9fa] p-1 rounded-xl text-xs font-bold text-center">
+        <div className="grid grid-cols-4 gap-1 bg-[#f8f9fa] p-1 rounded-xl text-xs font-bold text-center">
           <button
             onClick={() => setActiveTab('dashboard')}
             className={`py-2 rounded-lg ${activeTab === 'dashboard' ? 'bg-[#242329] text-white' : 'text-[#666]'}`}
@@ -753,7 +861,6 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
         )}
       </main>
 
-      {/* MODAL DE NOVO SERVIÇO */}
       {showServiceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
@@ -806,7 +913,6 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
         </div>
       )}
 
-      {/* MODAL DE NOVO PROFISSIONAL */}
       {showProfModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
@@ -860,7 +966,7 @@ function TenantAdminView({ tenant, onBack, notify, openPublicPage }: { tenant: T
   );
 }
 
-// --- VISÃO 3: PÁGINA PÚBLICA DE AGENDAMENTO ---
+// --- VISÃO 3: PÁGINA PÚBLICA DE AGENDAMENTO (APLICA A COR DO TEMA) ---
 function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => void; notify: (msg: string) => void }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -870,7 +976,7 @@ function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => voi
   const [step, setStep] = useState(1);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
-  const [date, setDate] = useState('27');
+  const [date, setDate] = useState('28');
   const [time, setTime] = useState('10:30');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -879,9 +985,9 @@ function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => voi
   const [bookedAppointments, setBookedAppointments] = useState<string[]>([]);
 
   const dates = [
-    { day: 'Hoje', date: '27', fullDate: '2026-10-27', weekday: 'TER' },
-    { day: 'Amanhã', date: '28', fullDate: '2026-10-28', weekday: 'QUA' },
-    { day: 'Qui', date: '29', fullDate: '2026-10-29', weekday: 'QUI' },
+    { day: 'Hoje', date: '28', fullDate: '2026-10-28', weekday: 'QUA' },
+    { day: 'Amanhã', date: '29', fullDate: '2026-10-29', weekday: 'QUI' },
+    { day: 'Sexta', date: '30', fullDate: '2026-10-30', weekday: 'SEX' },
   ];
   
   const allTimes = ['09:00', '09:45', '10:30', '11:15', '13:30', '14:15', '15:00', '16:30'];
@@ -950,6 +1056,7 @@ function BookingPage({ slug, onBack, notify }: { slug: string; onBack: () => voi
     );
   }
 
+  const themeStyle = THEME_STYLES[tenant.theme || 'coffee'] || THEME_STYLES.coffee;
   const pixKey = selectedProfessional?.pix_key || tenant.pix_key || '';
   const servicePrice = selectedService?.price ?? 0;
 
@@ -1037,7 +1144,6 @@ END:VCALENDAR`;
 
     const pixLine = paymentMethod === 'pix' && pixKey ? `\n*Pagamento:* Pix (chave: ${pixKey})` : '\n*Pagamento:* No local';
     
-    // MENSAGEM DO WHATSAPP 100% LIMPA
     const message = `Olá, ${tenant.name}! Gostaria de confirmar meu agendamento.\n\n` +
       `*Cliente:* ${name}\n` +
       `*Serviço:* ${selectedService.name}\n` +
@@ -1050,19 +1156,19 @@ END:VCALENDAR`;
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f1eb] pb-12">
-      <header className="flex items-center justify-between border-b border-[#e2ddd3] bg-[#f8f6f1] px-5 py-4">
-        <button onClick={onBack} className="text-xs font-semibold text-[#666] hover:underline">← Voltar</button>
-        <span className="font-display font-bold text-[#242329]">{tenant.name}</span>
-        <span className="text-xs text-[#888]">{tenant.category}</span>
+    <div className="min-h-screen pb-12 transition-colors" style={{ backgroundColor: themeStyle.bg, color: themeStyle.textPrimary }}>
+      <header className="flex items-center justify-between border-b border-black/10 px-5 py-4" style={{ backgroundColor: themeStyle.cardBg }}>
+        <button onClick={onBack} className="text-xs font-semibold opacity-70 hover:opacity-100">← Voltar</button>
+        <span className="font-display font-bold">{tenant.name}</span>
+        <span className="text-xs opacity-60">{tenant.category}</span>
       </header>
 
       <main className="mx-auto max-w-xl px-4 pt-6">
         {step < 4 && (
-          <div className="mb-6 flex justify-between border-b border-[#e2ddd3] pb-3 text-xs">
-            <span className={step === 1 ? 'font-bold text-[#805d4e]' : 'text-[#888]'}>1. Serviço</span>
-            <span className={step === 2 ? 'font-bold text-[#805d4e]' : 'text-[#888]'}>2. Data e Profissional</span>
-            <span className={step === 3 ? 'font-bold text-[#805d4e]' : 'text-[#888]'}>3. Pagamento e Dados</span>
+          <div className="mb-6 flex justify-between border-b border-black/10 pb-3 text-xs">
+            <span className={step === 1 ? 'font-bold' : 'opacity-50'} style={{ color: step === 1 ? themeStyle.accent : undefined }}>1. Serviço</span>
+            <span className={step === 2 ? 'font-bold' : 'opacity-50'} style={{ color: step === 2 ? themeStyle.accent : undefined }}>2. Data e Profissional</span>
+            <span className={step === 3 ? 'font-bold' : 'opacity-50'} style={{ color: step === 3 ? themeStyle.accent : undefined }}>3. Pagamento e Dados</span>
           </div>
         )}
 
@@ -1073,13 +1179,14 @@ END:VCALENDAR`;
               <div
                 key={s.id}
                 onClick={() => { setSelectedService(s); setStep(2); }}
-                className="flex cursor-pointer items-center justify-between rounded-2xl border border-[#e2ddd3] bg-white p-4 transition-all hover:border-[#805d4e]"
+                className="flex cursor-pointer items-center justify-between rounded-2xl border border-black/10 p-4 transition-all hover:scale-[1.01]"
+                style={{ backgroundColor: themeStyle.cardBg }}
               >
                 <div>
-                  <p className="font-bold text-[#242329]">{s.name}</p>
-                  <p className="text-xs text-[#777]">{s.duration_minutes} min</p>
+                  <p className="font-bold">{s.name}</p>
+                  <p className="text-xs opacity-60">{s.duration_minutes} min</p>
                 </div>
-                <p className="font-bold text-[#805d4e]">R$ {s.price.toFixed(2)}</p>
+                <p className="font-bold" style={{ color: themeStyle.accent }}>R$ {s.price.toFixed(2)}</p>
               </div>
             ))}
           </div>
@@ -1088,14 +1195,19 @@ END:VCALENDAR`;
         {step === 2 && (
           <div className="space-y-5">
             <div>
-              <h3 className="mb-2 text-xs font-bold uppercase text-[#777]">Profissional</h3>
+              <h3 className="mb-2 text-xs font-bold uppercase opacity-60">Profissional</h3>
               <div className="grid grid-cols-2 gap-2">
                 {professionals.map((p) => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => setSelectedProfessional(p)}
-                    className={`rounded-xl border p-3 text-left text-xs ${selectedProfessional?.id === p.id ? 'border-[#805d4e] bg-[#805d4e] text-white' : 'border-[#e2ddd3] bg-white text-[#333]'}`}
+                    className="rounded-xl border p-3 text-left text-xs transition-all"
+                    style={{
+                      backgroundColor: selectedProfessional?.id === p.id ? themeStyle.buttonBg : themeStyle.cardBg,
+                      color: selectedProfessional?.id === p.id ? '#ffffff' : themeStyle.textPrimary,
+                      borderColor: 'rgba(0,0,0,0.1)'
+                    }}
                   >
                     <p className="font-bold">{p.name}</p>
                     <p className="opacity-80">{p.role}</p>
@@ -1105,14 +1217,19 @@ END:VCALENDAR`;
             </div>
 
             <div>
-              <h3 className="mb-2 text-xs font-bold uppercase text-[#777]">Data</h3>
+              <h3 className="mb-2 text-xs font-bold uppercase opacity-60">Data</h3>
               <div className="grid grid-cols-3 gap-2">
                 {dates.map((d) => (
                   <button
                     key={d.date}
                     type="button"
                     onClick={() => setDate(d.date)}
-                    className={`rounded-xl border p-3 text-center text-xs ${date === d.date ? 'border-[#805d4e] bg-[#805d4e] text-white' : 'border-[#e2ddd3] bg-white text-[#333]'}`}
+                    className="rounded-xl border p-3 text-center text-xs transition-all"
+                    style={{
+                      backgroundColor: date === d.date ? themeStyle.buttonBg : themeStyle.cardBg,
+                      color: date === d.date ? '#ffffff' : themeStyle.textPrimary,
+                      borderColor: 'rgba(0,0,0,0.1)'
+                    }}
                   >
                     <p className="font-bold">{d.day}</p>
                     <p className="opacity-80">{d.date} Out ({d.weekday})</p>
@@ -1122,9 +1239,9 @@ END:VCALENDAR`;
             </div>
 
             <div>
-              <h3 className="mb-2 text-xs font-bold uppercase text-[#777]">Horários Disponíveis</h3>
+              <h3 className="mb-2 text-xs font-bold uppercase opacity-60">Horários Disponíveis</h3>
               {times.length === 0 ? (
-                <p className="text-xs text-[#d94e70] p-2 bg-[#fff] rounded-xl border border-[#e2ddd3]">Nenhum horário disponível para este profissional nesta data.</p>
+                <p className="text-xs text-[#d94e70] p-2 rounded-xl border border-black/10" style={{ backgroundColor: themeStyle.cardBg }}>Nenhum horário disponível para este profissional nesta data.</p>
               ) : (
                 <div className="grid grid-cols-4 gap-2">
                   {times.map((t) => (
@@ -1132,7 +1249,12 @@ END:VCALENDAR`;
                       key={t}
                       type="button"
                       onClick={() => setTime(t)}
-                      className={`rounded-xl border p-2 text-center text-xs ${time === t ? 'border-[#242329] bg-[#242329] text-white' : 'border-[#e2ddd3] bg-white text-[#333]'}`}
+                      className="rounded-xl border p-2 text-center text-xs transition-all"
+                      style={{
+                        backgroundColor: time === t ? themeStyle.buttonBg : themeStyle.cardBg,
+                        color: time === t ? '#ffffff' : themeStyle.textPrimary,
+                        borderColor: 'rgba(0,0,0,0.1)'
+                      }}
                     >
                       {t}
                     </button>
@@ -1143,7 +1265,8 @@ END:VCALENDAR`;
 
             <button
               onClick={() => setStep(3)}
-              className="mt-4 w-full rounded-xl bg-[#805d4e] py-3 text-sm font-bold text-white shadow-md"
+              className="mt-4 w-full rounded-xl py-3 text-sm font-bold text-white shadow-md transition-opacity hover:opacity-90"
+              style={{ backgroundColor: themeStyle.buttonBg }}
             >
               Avançar para confirmação →
             </button>
@@ -1152,39 +1275,39 @@ END:VCALENDAR`;
 
         {step === 3 && (
           <form onSubmit={submit} className="space-y-4">
-            <div className="rounded-2xl border border-[#e2ddd3] bg-white p-4 text-xs space-y-1">
-              <p className="font-bold text-sm text-[#242329]">{selectedService?.name}</p>
-              <p className="text-[#666]">Com {selectedProfessional?.name} em {date} de outubro às {time}</p>
-              <p className="font-bold text-[#805d4e] text-sm pt-1">R$ {servicePrice.toFixed(2)}</p>
+            <div className="rounded-2xl border border-black/10 p-4 text-xs space-y-1" style={{ backgroundColor: themeStyle.cardBg }}>
+              <p className="font-bold text-sm">{selectedService?.name}</p>
+              <p className="opacity-70">Com {selectedProfessional?.name} em {date} de outubro às {time}</p>
+              <p className="font-bold text-sm pt-1" style={{ color: themeStyle.accent }}>R$ {servicePrice.toFixed(2)}</p>
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs font-bold text-[#555]">
+              <label className="block text-xs font-bold opacity-80">
                 Forma de Pagamento
-                <select value={paymentMethod} onChange={(e: any) => setPaymentMethod(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e2ddd3] p-3 text-xs outline-none">
+                <select value={paymentMethod} onChange={(e: any) => setPaymentMethod(e.target.value)} className="mt-1 w-full rounded-xl border border-black/10 p-3 text-xs outline-none text-[#212529]">
                   <option value="local">Pagar no local</option>
                   <option value="pix">Pagar agora via Pix</option>
                 </select>
               </label>
 
               {paymentMethod === 'pix' && (
-                <div className="rounded-xl border border-[#e2ddd3] bg-white p-3 text-xs space-y-2">
+                <div className="rounded-xl border border-black/10 p-3 text-xs space-y-2" style={{ backgroundColor: themeStyle.cardBg }}>
                   <p className="font-bold">Chave Pix para pagamento:</p>
-                  <p className="bg-[#f4f1eb] p-2 rounded-lg font-mono text-center select-all">{pixKey || 'Chave não cadastrada'}</p>
+                  <p className="bg-black/5 p-2 rounded-lg font-mono text-center select-all">{pixKey || 'Chave não cadastrada'}</p>
                   <button type="button" onClick={copyPix} className="w-full rounded-lg bg-[#242329] py-2 text-white font-semibold">
                     {pixCopied ? 'Chave copiada! ✓' : 'Copiar chave Pix'}
                   </button>
                 </div>
               )}
 
-              <label className="block text-xs font-bold text-[#555]">
+              <label className="block text-xs font-bold opacity-80">
                 Seu Nome Completo
-                <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Digite seu nome" className="mt-1 w-full rounded-xl border border-[#e2ddd3] p-3 text-xs outline-none" />
+                <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Digite seu nome" className="mt-1 w-full rounded-xl border border-black/10 p-3 text-xs outline-none text-[#212529]" />
               </label>
 
-              <label className="block text-xs font-bold text-[#555]">
+              <label className="block text-xs font-bold opacity-80">
                 Seu WhatsApp
-                <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 99999-9999" className="mt-1 w-full rounded-xl border border-[#e2ddd3] p-3 text-xs outline-none" />
+                <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 99999-9999" className="mt-1 w-full rounded-xl border border-black/10 p-3 text-xs outline-none text-[#212529]" />
               </label>
             </div>
 
@@ -1195,13 +1318,13 @@ END:VCALENDAR`;
         )}
 
         {step === 4 && (
-          <div className="rounded-2xl border border-[#e2ddd3] bg-white p-6 text-center space-y-4">
+          <div className="rounded-2xl border border-black/10 p-6 text-center space-y-4" style={{ backgroundColor: themeStyle.cardBg }}>
             <div className="text-4xl">🎉</div>
-            <h2 className="font-display text-xl font-bold text-[#242329]">Agendamento Solicitado!</h2>
-            <p className="text-xs text-[#666]">Você foi redirecionado para o WhatsApp da {tenant.name}.</p>
+            <h2 className="font-display text-xl font-bold">Agendamento Solicitado!</h2>
+            <p className="text-xs opacity-70">Você foi redirecionado para o WhatsApp da {tenant.name}.</p>
             
-            <div className="pt-2 space-y-2 border-t border-[#eee]">
-              <p className="text-xs font-bold text-[#444] pt-2">Adicione este compromisso à sua agenda:</p>
+            <div className="pt-2 space-y-2 border-t border-black/10">
+              <p className="text-xs font-bold opacity-80 pt-2">Adicione este compromisso à sua agenda:</p>
 
               <button
                 type="button"
@@ -1220,7 +1343,7 @@ END:VCALENDAR`;
               </button>
             </div>
 
-            <button onClick={() => setStep(1)} className="text-xs text-[#805d4e] underline font-semibold pt-2 block mx-auto">
+            <button onClick={() => setStep(1)} className="text-xs underline font-semibold pt-2 block mx-auto opacity-80" style={{ color: themeStyle.accent }}>
               Fazer novo agendamento
             </button>
           </div>
