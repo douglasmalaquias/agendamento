@@ -405,8 +405,9 @@ function SuperAdminView({ onLogout, notify, userEmail }: { onLogout: () => void;
                     >
                       {copiedSlug === `cliente-${t.slug}` ? <Check size={14} /> : <Copy size={14} />} Copiar Link Loja
                     </button>
+                    {/* AQUI ESTÁ A CORREÇÃO SOLICITADA PARA O BOTÃO COPIAR LINK DO PAINEL */}
                     <button 
-                      onClick={() => copyToClipboard(window.location.origin, `painel-${t.slug}`)} 
+                      onClick={() => copyToClipboard(`${window.location.origin}/?admin_tenant=${t.slug}`, `painel-${t.slug}`)} 
                       className="flex items-center justify-center gap-1.5 text-xs font-bold text-[#212529] bg-[#f8f9fa] py-2 rounded-lg border border-[#e9ecef]"
                     >
                       {copiedSlug === `painel-${t.slug}` ? <Check size={14} /> : <Copy size={14} />} Copiar Link Painel
@@ -414,7 +415,6 @@ function SuperAdminView({ onLogout, notify, userEmail }: { onLogout: () => void;
                   </div>
                   
                   <div className="flex items-center justify-between pt-1">
-                    {/* AQUI ESTÁ A MÁGICA DA NOVA GUIA (Via Rota de URL) */}
                     <a 
                       href={`/?admin_tenant=${t.slug}`} 
                       target="_blank" 
