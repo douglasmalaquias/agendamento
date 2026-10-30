@@ -7,6 +7,8 @@ import {
   CalendarDays, 
   Search, 
   Link2, 
+  Copy,
+  Check,
   Pencil, 
   Trash2, 
   Plus, 
@@ -195,7 +197,7 @@ export default function App() {
   };
 
   if (authLoading) {
-    return <div className="flex h-screen items-center justify-center text-sm text-[#666]">A carregar sistema...</div>;
+    return <div className="flex h-screen items-center justify-center text-sm text-[#666]">Carregando sistema...</div>;
   }
 
   if (currentView === 'public') {
@@ -246,7 +248,7 @@ function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string)
     const { data, error } = await client.auth.signInWithPassword({ email, password });
 
     if (error) {
-      notify('E-mail ou palavra-passe incorretos');
+      notify('E-mail ou senha incorretos');
     } else if (data.user) {
       await onLoginSuccess(data.user.email ?? '');
     }
@@ -259,7 +261,7 @@ function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string)
         <div className="text-center mb-6">
           <div className="mx-auto h-12 w-12 rounded-2xl bg-[#242329] flex items-center justify-center text-white font-bold text-2xl mb-3">M</div>
           <h1 className="font-display text-2xl font-bold">Marcô.</h1>
-          <p className="text-xs text-[#6c757d] mt-1">Aceda ao seu painel administrativo</p>
+          <p className="text-xs text-[#6c757d] mt-1">Acesse o seu painel administrativo</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
@@ -279,7 +281,7 @@ function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string)
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#495057] mb-1">Palavra-passe</label>
+            <label className="block text-xs font-semibold text-[#495057] mb-1">Senha</label>
             <div className="relative">
               <Lock className="absolute left-3.5 top-3 text-[#adb5bd]" size={16} />
               <input
@@ -298,7 +300,7 @@ function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string)
             disabled={loading}
             className="w-full rounded-xl bg-[#242329] py-3 text-xs font-bold text-white shadow-md hover:bg-[#343a40] disabled:opacity-50"
           >
-            {loading ? 'A entrar...' : 'Entrar no Painel'}
+            {loading ? 'Entrando...' : 'Entrar no Painel'}
           </button>
         </form>
       </div>
@@ -311,6 +313,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
 
   const [showModal, setShowModal] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
@@ -336,6 +339,15 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
   useEffect(() => {
     void loadAdminData();
   }, []);
+
+  const handleCopyLink = (slug: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const fullUrl = `${window.location.origin}/${slug}`;
+    navigator.clipboard?.writeText(fullUrl);
+    setCopiedSlug(slug);
+    notify(`Link copiado: ${fullUrl}`);
+    setTimeout(() => setCopiedSlug(null), 2000);
+  };
 
   const handleOpenCreateModal = () => {
     setEditingTenant(null);
@@ -398,9 +410,9 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
         new_password: formPassword
       });
       if (pwdError) {
-        notify('Aviso: Comércio salvo, mas erro ao definir palavra-passe.');
+        notify('Aviso: Comércio salvo, mas erro ao definir senha.');
       } else {
-        notify('E-mail e Palavra-passe de acesso configurados!');
+        notify('E-mail e Senha de acesso configurados!');
       }
     }
 
@@ -484,7 +496,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
           </div>
 
           {loading ? (
-            <p className="py-8 text-center text-sm text-[#6c757d]">A carregar comércios...</p>
+            <p className="py-8 text-center text-sm text-[#6c757d]">Carregando comércios...</p>
           ) : filteredTenants.length === 0 ? (
             <p className="py-8 text-center text-sm text-[#6c757d]">Nenhum comércio encontrado.</p>
           ) : (
@@ -503,9 +515,14 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
                     </div>
 
                     <div className="flex items-center justify-between pt-2 border-t border-[#f8f9fa]">
-                      <button onClick={() => openPublicPage(t.slug)} className="flex items-center gap-1 text-xs font-bold text-[#805d4e]">
-                        <Link2 size={14} /> /{t.slug}
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openPublicPage(t.slug)} className="flex items-center gap-1 text-xs font-bold text-[#805d4e] hover:underline" title="Ver Página">
+                          <Link2 size={14} /> /{t.slug}
+                        </button>
+                        <button onClick={(e) => handleCopyLink(t.slug, e)} className="p-1 rounded-md hover:bg-[#f8f9fa] text-[#6c757d]" title="Copiar URL">
+                          {copiedSlug === t.slug ? <Check size={14} className="text-[#2e7d32]" /> : <Copy size={14} />}
+                        </button>
+                      </div>
 
                       <div className="flex items-center gap-2">
                         <button onClick={() => openTenantDashboard(t)} className="rounded-lg bg-[#242329] px-3 py-1.5 text-xs font-bold text-white">
@@ -547,9 +564,14 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
                         <td className="py-4 text-[#495057] text-xs font-mono">{t.owner_email || 'Não definido'}</td>
                         <td className="py-4 text-[#495057]">{t.whatsapp}</td>
                         <td className="py-4">
-                          <button onClick={() => openPublicPage(t.slug)} className="flex items-center gap-1 text-xs font-semibold text-[#805d4e] hover:underline">
-                            <Link2 size={14} /> /{t.slug}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => openPublicPage(t.slug)} className="flex items-center gap-1 text-xs font-semibold text-[#805d4e] hover:underline" title="Abrir Link">
+                              <Link2 size={14} /> /{t.slug}
+                            </button>
+                            <button onClick={(e) => handleCopyLink(t.slug, e)} className="p-1 rounded bg-[#f8f9fa] border border-[#e9ecef] text-[#6c757d] hover:bg-[#e9ecef]" title="Copiar URL">
+                              {copiedSlug === t.slug ? <Check size={13} className="text-[#2e7d32]" /> : <Copy size={13} />}
+                            </button>
+                          </div>
                         </td>
                         <td className="py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -574,7 +596,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
         </div>
       </main>
 
-      {/* MODAL COM CAMPO DE E-MAIL E PALAVRA-PASSE */}
+      {/* MODAL COM CAMPO DE E-MAIL E SENHA */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 overflow-y-auto">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl my-auto">
@@ -597,7 +619,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
                 </div>
                 <div>
                   <label className="block font-semibold text-[#495057]">
-                    {editingTenant ? 'Nova Palavra-passe (deixe em branco para não alterar)' : 'Definir Palavra-passe Inicial'}
+                    {editingTenant ? 'Nova Senha (deixe em branco para não alterar)' : 'Definir Senha Inicial'}
                   </label>
                   <input type="password" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} placeholder="••••••••" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none bg-white" />
                 </div>
@@ -973,7 +995,7 @@ function TenantAdminView({ tenant, onBack, onLogout, notify, openPublicPage, isS
   );
 }
 
-// --- VISÃO 3: PÁGINA PÚBLICA DE AGENDAMENTO (SEM BOTÃO VOLTAR NA ETAPA INICIAL) ---
+// --- VISÃO 3: PÁGINA PÚBLICA DE AGENDAMENTO ---
 function BookingPage({ slug, onBack, notify, isStandalone }: { slug: string; onBack: () => void; notify: (msg: string) => void; isStandalone?: boolean }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -1048,7 +1070,7 @@ function BookingPage({ slug, onBack, notify, isStandalone }: { slug: string; onB
   const times = allTimes.filter(t => !bookedAppointments.includes(t));
 
   if (loading) {
-    return <div className="flex h-screen items-center justify-center text-sm text-[#888]">A carregar agendamento...</div>;
+    return <div className="flex h-screen items-center justify-center text-sm text-[#888]">Carregando agendamento...</div>;
   }
 
   if (!tenant) {
