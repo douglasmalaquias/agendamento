@@ -3,7 +3,7 @@ import { createClient, User } from '@supabase/supabase-js';
 import { 
   Store, WalletCards, BarChart3, CalendarDays, Search, Link2, Copy, Check,
   Pencil, Trash2, Plus, ArrowLeft, X, Users, CheckCircle2, ExternalLink,
-  Palette, LogOut, Lock, Mail, KeyRound, Star, Camera
+  Palette, LogOut, Lock, Mail, KeyRound, Star, Camera, DollarSign
 } from 'lucide-react';
 
 // --- CONFIGURAÇÃO DO SUPABASE ---
@@ -24,7 +24,7 @@ const THEME_STYLES: Record<string, { bg: string; cardBg: string; textPrimary: st
 interface Tenant { id: string; name: string; slug: string; category: string; whatsapp: string; city?: string; theme?: string; owner_email?: string; pix_key?: string; }
 interface Service { id: string; tenant_id: string; name: string; duration_minutes: number; price: number; active: boolean; }
 interface Professional { id: string; tenant_id: string; name: string; role: string; photo_url?: string; pix_key?: string; active: boolean; }
-interface Appointment { id: string; tenant_id: string; professional_id?: string; customer_name: string; customer_phone: string; appointment_date: string; appointment_time: string; status: string; }
+interface Appointment { id: string; tenant_id: string; professional_id?: string; customer_name: string; customer_phone: string; appointment_date: string; appointment_time: string; status: string; payment_method: string; }
 
 const fallbackTenant: Tenant = { id: 'demo-tenant', name: 'Barbearia Aurora', slug: 'barbearia-aurora', category: 'Barbearia', whatsapp: '5511999999999', city: 'São Paulo, SP', theme: 'coffee' };
 
@@ -63,21 +63,17 @@ export default function App() {
   }, []);
 
   const routeUserByEmail = async (email: string) => {
-    // A SEPARAÇÃO DE ACESSOS ACONTECE AQUI:
-    // Se for você (Super Admin), vai para o painel global.
     if (email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
       setCurrentView('super-admin');
       return;
     }
-    // Se não for você, o sistema procura no banco qual comércio pertence àquele e-mail
     const client = supabase;
     if (client) {
       const { data } = await client.from('marco_tenants').select('*').eq('owner_email', email).single();
       if (data) { 
         setActiveTenant(data as Tenant); 
-        setCurrentView('tenant-admin'); // Vai para o painel restrito da loja
-      }
-      else { 
+        setCurrentView('tenant-admin'); 
+      } else { 
         notify('Nenhum estabelecimento associado a este e-mail'); 
         setCurrentView('login'); 
       }
@@ -90,8 +86,6 @@ export default function App() {
   };
 
   const openPublicPage = (slug: string) => { window.history.pushState({}, '', `/${slug}`); setCurrentSlug(slug); setCurrentView('public'); };
-  
-  // Função para você (Super Admin) entrar no painel do cliente
   const openTenantDashboard = (tenant: Tenant) => { setActiveTenant(tenant); setCurrentView('tenant-admin'); };
 
   const backToSuperAdmin = () => {
@@ -113,7 +107,7 @@ export default function App() {
   );
 }
 
-// --- TELA DE LOGIN (Somente Login - Sem botão de criar conta pública) ---
+// --- TELA DE LOGIN ---
 function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string) => Promise<void>; notify: (msg: string) => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -149,7 +143,6 @@ function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string)
               <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seuemail@comercio.com" className="w-full rounded-xl border border-[#e9ecef] py-2.5 pl-10 pr-4 text-xs outline-none focus:border-[#242329]" />
             </div>
           </div>
-
           <div>
             <label className="block text-xs font-semibold text-[#495057] mb-1">Senha</label>
             <div className="relative">
@@ -157,7 +150,6 @@ function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string)
               <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" minLength={6} className="w-full rounded-xl border border-[#e9ecef] py-2.5 pl-10 pr-4 text-xs outline-none focus:border-[#242329]" />
             </div>
           </div>
-
           <button type="submit" disabled={loading} className="w-full rounded-xl bg-[#242329] py-3 mt-2 text-xs font-bold text-white shadow-md hover:bg-[#343a40] disabled:opacity-50">
             {loading ? 'Aguarde...' : 'Entrar no Painel'}
           </button>
@@ -167,7 +159,7 @@ function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string)
   );
 }
 
-// --- VISÃO 1: SUPER ADMIN (Somente Você tem Acesso) ---
+// --- VISÃO 1: SUPER ADMIN ---
 function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify, userEmail }: { openPublicPage: (slug: string) => void; openTenantDashboard: (tenant: Tenant) => void; onLogout: () => void; notify: (msg: string) => void; userEmail?: string }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [search, setSearch] = useState('');
@@ -184,6 +176,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
   const [formTheme, setFormTheme] = useState('coffee');
   const [formOwnerEmail, setFormOwnerEmail] = useState('');
   const [formPassword, setFormPassword] = useState('');
+  const [formPix, setFormPix] = useState(''); // Estado para o Pix do Estabelecimento
 
   const loadAdminData = async () => {
     setLoading(true);
@@ -196,23 +189,25 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
   };
   useEffect(() => { void loadAdminData(); }, []);
 
-  const handleCopyLink = (slug: string, e: React.MouseEvent) => {
+  const handleCopyLink = (type: 'cliente' | 'painel', slug: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard?.writeText(`${window.location.origin}/${slug}`);
-    setCopiedSlug(slug);
+    const url = type === 'cliente' ? `${window.location.origin}/${slug}` : window.location.origin;
+    navigator.clipboard?.writeText(url);
+    setCopiedSlug(`${type}-${slug}`);
     setTimeout(() => setCopiedSlug(null), 2000);
   };
 
   const handleOpenCreateModal = () => {
     setEditingTenant(null); setFormName(''); setFormSlug(''); setFormCategory('Barbearia');
-    setFormWhatsapp(''); setFormCity('São Paulo, SP'); setFormTheme('coffee'); setFormOwnerEmail(''); setFormPassword('');
+    setFormWhatsapp(''); setFormCity('São Paulo, SP'); setFormTheme('coffee'); setFormOwnerEmail(''); setFormPassword(''); setFormPix('');
     setShowModal(true);
   };
 
   const handleOpenEditModal = (t: Tenant) => {
     setEditingTenant(t); setFormName(t.name); setFormSlug(t.slug); setFormCategory(t.category);
     setFormWhatsapp(t.whatsapp); setFormCity(t.city || 'São Paulo, SP'); setFormTheme(t.theme || 'coffee');
-    setFormOwnerEmail(t.owner_email || ''); setFormPassword(''); setShowModal(true);
+    setFormOwnerEmail(t.owner_email || ''); setFormPassword(''); setFormPix(t.pix_key || ''); 
+    setShowModal(true);
   };
 
   const handleSaveTenant = async (e: FormEvent) => {
@@ -222,7 +217,8 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
 
     const payload = {
       name: formName, slug: formSlug.toLowerCase().trim().replace(/\s+/g, '-'), category: formCategory,
-      whatsapp: formWhatsapp.replace(/\D/g, ''), city: formCity, theme: formTheme, owner_email: formOwnerEmail.trim().toLowerCase()
+      whatsapp: formWhatsapp.replace(/\D/g, ''), city: formCity, theme: formTheme, owner_email: formOwnerEmail.trim().toLowerCase(),
+      pix_key: formPix.trim() // Salvando o Pix
     };
 
     if (editingTenant) {
@@ -236,7 +232,6 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
       }
     }
 
-    // A mágica acontece aqui: A função SQL cria/atualiza a conta na Autenticação do Supabase automaticamente!
     if (formOwnerEmail && formPassword) {
       const { error: pwdError } = await client.rpc('admin_set_user_password', {
         user_email: formOwnerEmail.trim().toLowerCase(),
@@ -285,20 +280,31 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
             {filteredTenants.map((t) => (
-              <div key={t.id} className="rounded-xl border border-[#e9ecef] p-4 bg-white space-y-3 shadow-sm">
+              <div key={t.id} className="rounded-xl border border-[#e9ecef] p-4 bg-white space-y-3 shadow-sm flex flex-col justify-between">
                 <div>
                   <h3 className="font-bold text-base text-[#212529]">{t.name}</h3>
                   <span className="text-xs text-[#6c757d]">{t.category}</span>
                   {t.owner_email && <p className="text-[11px] text-[#805d4e] mt-1 font-mono">Acesso: {t.owner_email}</p>}
                 </div>
-                <div className="flex items-center justify-between pt-3 border-t border-[#f8f9fa]">
-                  <button onClick={(e) => handleCopyLink(t.slug, e)} className="flex items-center gap-1 text-xs font-bold text-[#805d4e] bg-[#f4f1eb] px-2 py-1 rounded">
-                    {copiedSlug === t.slug ? <Check size={14} /> : <Copy size={14} />} Link Cliente
-                  </button>
+                
+                <div className="flex flex-col gap-2 pt-3 border-t border-[#f8f9fa]">
+                  {/* Botões de Copiar Links para enviar ao Lojista */}
                   <div className="flex items-center gap-2">
-                    <button onClick={() => openTenantDashboard(t)} className="rounded-lg bg-[#242329] px-3 py-1.5 text-xs font-bold text-white" title="Espiar painel da loja">Entrar</button>
-                    <button onClick={() => handleOpenEditModal(t)} className="rounded-lg p-1.5 text-[#6c757d] bg-[#f8f9fa]"><Pencil size={15} /></button>
-                    <button onClick={() => handleDeleteTenant(t.id, t.name)} className="rounded-lg p-1.5 text-[#d94e70] bg-[#fde8ed]"><Trash2 size={15} /></button>
+                    <button onClick={(e) => handleCopyLink('cliente', t.slug, e)} className="flex-1 flex items-center justify-center gap-1 text-xs font-bold text-[#805d4e] bg-[#f4f1eb] px-2 py-1.5 rounded border border-[#e9ecef]">
+                      {copiedSlug === `cliente-${t.slug}` ? <Check size={14} /> : <Copy size={14} />} Link Cliente
+                    </button>
+                    <button onClick={(e) => handleCopyLink('painel', t.slug, e)} className="flex-1 flex items-center justify-center gap-1 text-xs font-bold text-[#212529] bg-[#f8f9fa] px-2 py-1.5 rounded border border-[#e9ecef]">
+                      {copiedSlug === `painel-${t.slug}` ? <Check size={14} /> : <Copy size={14} />} Link Painel
+                    </button>
+                  </div>
+                  
+                  {/* Ações de Administração */}
+                  <div className="flex items-center justify-between">
+                    <button onClick={() => openTenantDashboard(t)} className="rounded-lg bg-[#242329] px-4 py-1.5 text-xs font-bold text-white w-full mr-2" title="Espiar painel da loja">Entrar no Painel</button>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => handleOpenEditModal(t)} className="rounded-lg p-1.5 text-[#6c757d] bg-[#f8f9fa]"><Pencil size={15} /></button>
+                      <button onClick={() => handleDeleteTenant(t.id, t.name)} className="rounded-lg p-1.5 text-[#d94e70] bg-[#fde8ed]"><Trash2 size={15} /></button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -307,7 +313,6 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
         </div>
       </main>
 
-      {/* MODAL DE CADASTRO DO SUPER ADMIN */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 overflow-y-auto">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl my-auto">
@@ -319,7 +324,7 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
             <form onSubmit={handleSaveTenant} className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-[#495057]">Nome do Estabelecimento</label>
-                <input required type="text" value={formName} onChange={(e) => { setFormName(e.target.value); if (!editingTenant) setFormSlug(e.target.value.toLowerCase().replace(/\s+/g, '-')); }} placeholder="Ex: Studio Elena Nails" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none" />
+                <input required type="text" value={formName} onChange={(e) => { setFormName(e.target.value); if (!editingTenant) setFormSlug(e.target.value.toLowerCase().replace(/\s+/g, '-')); }} placeholder="Ex: Studio VIP" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none" />
               </div>
 
               <div className="bg-[#f8f9fa] p-3 rounded-xl border border-[#e9ecef] space-y-2">
@@ -352,6 +357,17 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-[#495057]">WhatsApp (Com DDD)</label>
+                  <input required type="text" value={formWhatsapp} onChange={(e) => setFormWhatsapp(e.target.value)} placeholder="11999999999" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#495057]">Chave Pix do Local (Opcional)</label>
+                  <input type="text" value={formPix} onChange={(e) => setFormPix(e.target.value)} placeholder="CNPJ, E-mail ou Celular" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none" />
+                </div>
+              </div>
+
               <div className="bg-[#f8f9fa] p-3 rounded-xl border border-[#e9ecef]">
                 <label className="block font-bold text-[#212529] mb-2 flex items-center gap-1"><Palette size={14} className="text-[#805d4e]" /> Cor da Página do Lojista</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -359,17 +375,6 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
                   <button type="button" onClick={() => setFormTheme('dark')} className={`rounded-xl p-2 text-left border text-[10px] font-semibold flex items-center justify-between ${formTheme === 'dark' ? 'border-2 border-[#242329] bg-[#1f1f23] text-white' : 'border-[#e9ecef] bg-[#121214] text-white'}`}><span>⬛ Dark</span></button>
                   <button type="button" onClick={() => setFormTheme('blue')} className={`rounded-xl p-2 text-left border text-[10px] font-semibold flex items-center justify-between ${formTheme === 'blue' ? 'border-2 border-[#242329] bg-white' : 'border-[#e9ecef] bg-[#f8fafc]'}`}><span>🔵 Azul</span></button>
                   <button type="button" onClick={() => setFormTheme('emerald')} className={`rounded-xl p-2 text-left border text-[10px] font-semibold flex items-center justify-between ${formTheme === 'emerald' ? 'border-2 border-[#242329] bg-white' : 'border-[#e9ecef] bg-[#f0fdf4]'}`}><span>🟢 Verde</span></button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-semibold text-[#495057]">WhatsApp (Com DDD)</label>
-                  <input required type="text" value={formWhatsapp} onChange={(e) => setFormWhatsapp(e.target.value)} placeholder="11999999999" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none" />
-                </div>
-                <div>
-                  <label className="block font-semibold text-[#495057]">Bairro e Cidade</label>
-                  <input type="text" value={formCity} onChange={(e) => setFormCity(e.target.value)} placeholder="SP - Jardins" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none" />
                 </div>
               </div>
 
@@ -384,24 +389,22 @@ function SuperAdminView({ openPublicPage, openTenantDashboard, onLogout, notify,
   );
 }
 
-// --- VISÃO 2: DASHBOARD DO ESTABELECIMENTO (O que o dono da loja vê) ---
+// --- VISÃO 2: DASHBOARD DO ESTABELECIMENTO ---
 function TenantAdminView({ tenant, onBack, onLogout, notify, openPublicPage, isSuperAdmin }: { tenant: Tenant; onBack: () => void; onLogout: () => void; notify: (msg: string) => void; openPublicPage: (slug: string) => void; isSuperAdmin: boolean }) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'professionals'>('dashboard');
   const [services, setServices] = useState<Service[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   
-  // States Modal Serviços
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [serviceName, setServiceName] = useState('');
   const [serviceDuration, setServiceDuration] = useState('45');
   const [servicePrice, setServicePrice] = useState('80');
 
-  // States Modal Profissionais (COM FOTO)
   const [showProfModal, setShowProfModal] = useState(false);
   const [profName, setProfName] = useState('');
   const [profRole, setProfRole] = useState('Especialista');
-  const [profPix, setProfPix] = useState('');
+  const [profPix, setProfPix] = useState(''); // Campo Pix Restaurado
   const [profPhoto, setProfPhoto] = useState<File | null>(null);
   const [isSavingProf, setIsSavingProf] = useState(false);
 
@@ -443,7 +446,7 @@ function TenantAdminView({ tenant, onBack, onLogout, notify, openPublicPage, isS
     }
 
     const { error } = await supabase.from('marco_professionals').insert({
-      tenant_id: tenant.id, name: profName, role: profRole, pix_key: profPix, photo_url, active: true
+      tenant_id: tenant.id, name: profName, role: profRole, pix_key: profPix.trim(), photo_url, active: true
     });
 
     if (!error) { notify('Profissional cadastrado!'); setShowProfModal(false); setProfName(''); setProfPix(''); setProfPhoto(null); void loadTenantDetails(); }
@@ -504,7 +507,10 @@ function TenantAdminView({ tenant, onBack, onLogout, notify, openPublicPage, isS
                         {p.name.substring(0, 2).toUpperCase()}
                       </div>
                     )}
-                    <div><p className="font-bold text-sm">{p.name}</p><p className="text-xs text-[#6c757d]">{p.role}</p></div>
+                    <div>
+                      <p className="font-bold text-sm">{p.name}</p>
+                      <p className="text-xs text-[#6c757d]">{p.role} {p.pix_key ? '· Pix Cadastrado' : ''}</p>
+                    </div>
                   </div>
                   <button onClick={() => handleDeleteProf(p.id)} className="p-2 text-[#d94e70] hover:bg-[#fde8ed] rounded-lg"><Trash2 size={16} /></button>
                 </div>
@@ -531,10 +537,9 @@ function TenantAdminView({ tenant, onBack, onLogout, notify, openPublicPage, isS
         )}
       </main>
 
-      {/* Modal Adicionar Profissional com Foto */}
       {showProfModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl overflow-y-auto max-h-[90vh]">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-display text-lg font-bold">Adicionar à Equipe</h2>
               <button onClick={() => setShowProfModal(false)} className="text-[#6c757d]"><X size={20} /></button>
@@ -556,13 +561,13 @@ function TenantAdminView({ tenant, onBack, onLogout, notify, openPublicPage, isS
               </div>
               <div><label className="block text-xs font-semibold text-[#495057]">Nome</label><input required type="text" value={profName} onChange={(e) => setProfName(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" /></div>
               <div><label className="block text-xs font-semibold text-[#495057]">Cargo / Especialidade</label><input required type="text" value={profRole} onChange={(e) => setProfRole(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" /></div>
+              <div><label className="block text-xs font-semibold text-[#495057]">Chave Pix Própria (Opcional)</label><input type="text" value={profPix} onChange={(e) => setProfPix(e.target.value)} placeholder="Celular, CPF ou E-mail" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" /></div>
               <button type="submit" disabled={isSavingProf} className="mt-6 w-full rounded-xl bg-[#242329] py-3 text-sm font-bold text-white disabled:opacity-50">{isSavingProf ? 'Salvando...' : 'Salvar Membro'}</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Modal Adicionar Serviço */}
       {showServiceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
@@ -583,7 +588,7 @@ function TenantAdminView({ tenant, onBack, onLogout, notify, openPublicPage, isS
   );
 }
 
-// --- VISÃO 3: PÁGINA PÚBLICA DE AGENDAMENTO (O QUE O CLIENTE FINAL VÊ) ---
+// --- VISÃO 3: PÁGINA PÚBLICA DE AGENDAMENTO ---
 function BookingPage({ slug, onBack, notify, isStandalone }: { slug: string; onBack: () => void; notify: (msg: string) => void; isStandalone?: boolean }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -597,6 +602,10 @@ function BookingPage({ slug, onBack, notify, isStandalone }: { slug: string; onB
   const [time, setTime] = useState('16:00');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  
+  // Estados para Pagamento Pix
+  const [paymentMethod, setPaymentMethod] = useState<'local' | 'pix'>('local');
+  const [pixCopied, setPixCopied] = useState(false);
   
   const dates = [{ day: 'Sáb', date: '31', fullDate: '2026-10-31', weekday: 'OUT' }, { day: 'Dom', date: '1', fullDate: '2026-11-01', weekday: 'NOV' }, { day: 'Seg', date: '2', fullDate: '2026-11-02', weekday: 'NOV' }];
   const times = ['09:00', '10:30', '13:00', '14:30', '16:00', '17:00'];
@@ -623,10 +632,22 @@ function BookingPage({ slug, onBack, notify, isStandalone }: { slug: string; onB
   if (!tenant) return <div className="flex min-h-screen items-center justify-center bg-[#f8f9fa] text-center"><div><h1 className="text-4xl font-bold">404</h1><p>Comércio não encontrado.</p></div></div>;
 
   const themeStyle = THEME_STYLES[tenant.theme || 'coffee'] || THEME_STYLES.coffee;
+  
+  // LÓGICA DO PIX: Pega do Profissional, se não tiver, pega do Estabelecimento
+  const pixKey = selectedProfessional?.pix_key || tenant.pix_key || '';
+
+  const copyPix = () => {
+    if (!pixKey) return;
+    navigator.clipboard?.writeText(pixKey);
+    setPixCopied(true);
+    setTimeout(() => setPixCopied(false), 2000);
+  };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const message = `Olá, *${tenant.name}*! Gostaria de agendar:\n\n*Serviço:* ${selectedService?.name}\n*Profissional:* ${selectedProfessional?.name ?? 'Qualquer um'}\n*Data:* ${date} às ${time}\n*Cliente:* ${name} (${phone})`;
+    const pixLine = paymentMethod === 'pix' && pixKey ? `\n*Pagamento:* Pix (${pixKey})` : '\n*Pagamento:* Pagar no local';
+    const message = `Olá, *${tenant.name}*! Gostaria de agendar:\n\n*Serviço:* ${selectedService?.name}\n*Profissional:* ${selectedProfessional?.name ?? 'Sem preferência'}\n*Data:* ${date} de Outubro às ${time}\n*Cliente:* ${name} (${phone})${pixLine}`;
+    
     window.open(`https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(message)}`, '_blank');
     setStep(4);
   };
@@ -708,8 +729,39 @@ function BookingPage({ slug, onBack, notify, isStandalone }: { slug: string; onB
         {step === 3 && (
           <form onSubmit={submit} className="space-y-4">
             <h2 className="font-display text-xl font-bold">Confirme seus dados</h2>
-            <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu Nome Completo" className="w-full rounded-xl border border-black/10 p-4 text-sm outline-none bg-white" />
-            <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Seu WhatsApp" className="w-full rounded-xl border border-black/10 p-4 text-sm outline-none bg-white" />
+            
+            <div className="rounded-2xl border border-black/5 p-4 bg-white space-y-2 text-xs shadow-sm" style={{ backgroundColor: themeStyle.cardBg }}>
+              <div className="flex justify-between font-bold text-sm">
+                <span>{selectedService?.name}</span>
+                <span style={{ color: themeStyle.accent }}>R$ {selectedService?.price.toFixed(2)}</span>
+              </div>
+              <p className="opacity-70">Data: {date} de Outubro às {time}</p>
+              <p className="opacity-70">Profissional: {selectedProfessional?.name || 'Sem preferência (Qualquer disponível)'}</p>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <label className="block text-xs font-bold opacity-80">
+                Forma de Pagamento
+                <select value={paymentMethod} onChange={(e: any) => setPaymentMethod(e.target.value)} className="mt-1 w-full rounded-xl border border-black/10 p-3 text-xs outline-none text-[#212529] bg-white">
+                  <option value="local">Pagar no local (Após o serviço)</option>
+                  {pixKey && <option value="pix">Pagar agora via Pix</option>}
+                </select>
+              </label>
+
+              {paymentMethod === 'pix' && pixKey && (
+                <div className="rounded-xl border border-black/10 p-3 text-xs space-y-2 bg-white">
+                  <p className="font-bold flex items-center gap-1"><DollarSign size={14} className="text-[#2e7d32]" /> Chave Pix para pagamento:</p>
+                  <p className="bg-black/5 p-2 rounded-lg font-mono text-center select-all">{pixKey}</p>
+                  <button type="button" onClick={copyPix} className="w-full rounded-lg bg-[#242329] py-2 text-white font-semibold">
+                    {pixCopied ? 'Chave copiada! ✓' : 'Copiar chave Pix'}
+                  </button>
+                </div>
+              )}
+
+              <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu Nome Completo" className="mt-2 w-full rounded-xl border border-black/10 p-4 text-sm outline-none bg-white" />
+              <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Seu WhatsApp" className="w-full rounded-xl border border-black/10 p-4 text-sm outline-none bg-white" />
+            </div>
+
             <button type="submit" className="w-full rounded-2xl bg-[#0e7490] py-4 text-sm font-bold text-white shadow-lg">Confirmar pelo WhatsApp →</button>
           </form>
         )}
