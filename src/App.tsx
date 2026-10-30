@@ -1003,17 +1003,26 @@ END:VCALENDAR`;
                   {pixKey && <option value="pix">Pagar agora via Pix</option>}
                 </select>
               </label>
-
-              {paymentMethod === 'pix' && pixKey && (
-                <div className="rounded-xl border border-black/10 p-3 text-xs space-y-2 bg-white">
-                  <p className="font-bold flex items-center gap-1"><DollarSign size={14} className="text-[#2e7d32]" /> Chave Pix para pagamento:</p>
-                  <p className="bg-black/5 p-2 rounded-lg font-mono text-center select-all">{pixKey}</p>
-                  <button type="button" onClick={copyPix} className="w-full rounded-lg bg-[#242329] py-2 text-white font-semibold">
-                    {pixCopied ? 'Chave copiada! ✓' : 'Copiar chave Pix'}
-                  </button>
-                </div>
-              )}
-
+            {paymentMethod === 'pix' && pixKey && (
+  <div className="rounded-xl border border-black/10 p-4 text-xs space-y-2.5 bg-white text-[#212529]">
+    <p className="font-bold flex items-center gap-1.5 text-xs text-[#212529]">
+      <DollarSign size={16} className="text-[#2e7d32]" /> Chave Pix para pagamento:
+    </p>
+    <p className="bg-[#f8f9fa] p-2.5 rounded-lg font-mono text-center text-sm font-semibold select-all text-[#212529] border border-[#e9ecef]">
+      {pixKey}
+    </p>
+    <button 
+      type="button" 
+      onClick={copyPix} 
+      className="w-full rounded-xl bg-[#242329] py-2.5 text-white font-bold hover:bg-[#343a40] transition-colors"
+    >
+      {pixCopied ? 'Chave copiada! ✓' : 'Copiar chave Pix'}
+    </button>
+    <p className="text-[11px] text-[#6c757d] text-center font-medium pt-1">
+      💡 Ao concluir o pagamento no Pix, favor encaminhar o comprovante pelo WhatsApp.
+    </p>
+  </div>
+)}
               <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu Nome Completo" className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white" />
               <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Seu WhatsApp" className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white" />
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações (opcional)..." rows={2} className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white" />
