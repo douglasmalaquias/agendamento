@@ -202,14 +202,14 @@ function LoginPage({ onLoginSuccess, notify }: { onLoginSuccess: (email: string)
             <label className="block text-xs font-semibold text-[#495057] mb-1">E-mail de Acesso</label>
             <div className="relative">
               <Mail className="absolute left-3.5 top-2.5 text-[#adb5bd]" size={16} />
-              <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="contato@barbearia.com" className="w-full rounded-xl border border-[#e9ecef] py-2.5 pl-10 pr-4 text-xs outline-none focus:border-[#242329]" />
+              <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="contato@barbearia.com" className="w-full rounded-xl border border-[#e9ecef] py-2.5 pl-10 pr-4 text-xs outline-none focus:border-[#242329] bg-white text-[#212529]" />
             </div>
           </div>
           <div>
             <label className="block text-xs font-semibold text-[#495057] mb-1">Senha</label>
             <div className="relative">
               <Lock className="absolute left-3.5 top-2.5 text-[#adb5bd]" size={16} />
-              <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full rounded-xl border border-[#e9ecef] py-2.5 pl-10 pr-4 text-xs outline-none focus:border-[#242329]" />
+              <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full rounded-xl border border-[#e9ecef] py-2.5 pl-10 pr-4 text-xs outline-none focus:border-[#242329] bg-white text-[#212529]" />
             </div>
           </div>
           <button type="submit" disabled={loading} className="w-full rounded-xl bg-[#242329] py-3 mt-2 text-xs font-bold text-white shadow-md hover:bg-[#343a40] disabled:opacity-50">
@@ -375,7 +375,7 @@ function SuperAdminView({ onLogout, notify, userEmail }: { onLogout: () => void;
         <div className="rounded-2xl border border-[#e9ecef] bg-white p-4 shadow-sm">
           <div className="mb-6 relative w-full">
             <Search className="absolute left-3.5 top-3 text-[#adb5bd]" size={18} />
-            <input type="text" placeholder="Pesquisar por nome ou categoria..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-xl border border-[#e9ecef] bg-[#f8f9fa] py-2.5 pl-10 pr-4 text-sm outline-none" />
+            <input type="text" placeholder="Pesquisar por nome ou categoria..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-xl border border-[#e9ecef] bg-[#f8f9fa] py-2.5 pl-10 pr-4 text-sm outline-none text-[#212529]" />
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -424,6 +424,7 @@ function SuperAdminView({ onLogout, notify, userEmail }: { onLogout: () => void;
         </div>
       </main>
 
+      {/* MODAL COM A OPÇÃO RESTAURADA DE ESCOLHA DE TEMA */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 overflow-y-auto">
           <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl my-auto">
@@ -458,11 +459,11 @@ function SuperAdminView({ onLogout, notify, userEmail }: { onLogout: () => void;
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2 sm:col-span-1">
                   <label className="block text-xs font-semibold text-[#495057]">Nome Comercial</label>
-                  <input required type="text" value={formName} onChange={(e) => { setFormName(e.target.value); if (!editingTenant) setFormSlug(e.target.value.toLowerCase().replace(/\s+/g, '-')); }} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none" />
+                  <input required type="text" value={formName} onChange={(e) => { setFormName(e.target.value); if (!editingTenant) setFormSlug(e.target.value.toLowerCase().replace(/\s+/g, '-')); }} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none bg-white text-[#212529]" />
                 </div>
                 <div className="col-span-2 sm:col-span-1">
                   <label className="block text-xs font-semibold text-[#495057]">Link Público (Slug)</label>
-                  <input required type="text" value={formSlug} onChange={(e) => setFormSlug(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none" />
+                  <input required type="text" value={formSlug} onChange={(e) => setFormSlug(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2.5 text-xs outline-none bg-white text-[#212529]" />
                 </div>
               </div>
 
@@ -477,40 +478,51 @@ function SuperAdminView({ onLogout, notify, userEmail }: { onLogout: () => void;
                 </div>
               </div>
 
+              {/* TEMA VISUAL DA PÁGINA (RESTAURADO) */}
+              <div className="bg-[#f8f9fa] p-3 rounded-xl border border-[#e9ecef]">
+                <label className="block font-bold text-[#212529] mb-2 flex items-center gap-1 text-xs"><Palette size={14} className="text-[#805d4e]" /> Tema Visual da Página Pública</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setFormTheme('coffee')} className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'coffee' ? 'border-2 border-[#242329] bg-white text-[#1a1918]' : 'border-[#e9ecef] bg-[#fbf9f6] text-[#1a1918]'}`}><span>🟤 Café</span></button>
+                  <button type="button" onClick={() => setFormTheme('dark')} className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'dark' ? 'border-2 border-white bg-[#1f1f23] text-white' : 'border-[#e9ecef] bg-[#121214] text-white'}`}><span>⬛ Dark / Preto</span></button>
+                  <button type="button" onClick={() => setFormTheme('blue')} className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'blue' ? 'border-2 border-[#242329] bg-white text-[#0f172a]' : 'border-[#e9ecef] bg-[#f8fafc] text-[#0f172a]'}`}><span>🔵 Azul</span></button>
+                  <button type="button" onClick={() => setFormTheme('emerald')} className={`rounded-xl p-2.5 text-left border text-xs font-semibold flex items-center justify-between ${formTheme === 'emerald' ? 'border-2 border-[#242329] bg-white text-[#064e3b]' : 'border-[#e9ecef] bg-[#f0fdf4] text-[#064e3b]'}`}><span>🟢 Verde</span></button>
+                </div>
+              </div>
+
               <div className="bg-[#f8f9fa] p-3 rounded-xl border border-[#e9ecef] space-y-3">
                 <label className="block font-bold text-[#212529] text-sm flex items-center gap-1"><MapPin size={16}/> Localização</label>
                 <div className="grid grid-cols-3 gap-2">
                   <div className="col-span-3 sm:col-span-1">
                     <label className="block text-[10px] font-semibold text-[#495057]">CEP</label>
-                    <input type="text" value={formCep} onChange={(e) => setFormCep(e.target.value)} placeholder="00000-000" className="mt-1 w-full rounded-lg border border-[#e9ecef] p-2 text-xs outline-none bg-white" />
+                    <input type="text" value={formCep} onChange={(e) => setFormCep(e.target.value)} placeholder="00000-000" className="mt-1 w-full rounded-lg border border-[#e9ecef] p-2 text-xs outline-none bg-white text-[#212529]" />
                   </div>
                   <div className="col-span-3 sm:col-span-2">
-                    <label className="block text-[10px] font-semibold text-[#495057]">Endereço (Rua, Número, Bairro)</label>
-                    <input type="text" value={formAddress} onChange={(e) => setFormAddress(e.target.value)} placeholder="Av Paulista, 1000 - Bela Vista" className="mt-1 w-full rounded-lg border border-[#e9ecef] p-2 text-xs outline-none bg-white" />
+                    <label className="block text-[10px] font-semibold text-[#495057]">Endereço</label>
+                    <input type="text" value={formAddress} onChange={(e) => setFormAddress(e.target.value)} placeholder="Av Paulista, 1000" className="mt-1 w-full rounded-lg border border-[#e9ecef] p-2 text-xs outline-none bg-white text-[#212529]" />
                   </div>
                   <div className="col-span-3 sm:col-span-2">
                     <label className="block text-[10px] font-semibold text-[#495057]">Cidade</label>
-                    <input type="text" value={formCity} onChange={(e) => setFormCity(e.target.value)} placeholder="São Paulo" className="mt-1 w-full rounded-lg border border-[#e9ecef] p-2 text-xs outline-none bg-white" />
+                    <input type="text" value={formCity} onChange={(e) => setFormCity(e.target.value)} placeholder="São Paulo" className="mt-1 w-full rounded-lg border border-[#e9ecef] p-2 text-xs outline-none bg-white text-[#212529]" />
                   </div>
                   <div className="col-span-3 sm:col-span-1">
                     <label className="block text-[10px] font-semibold text-[#495057]">Estado</label>
-                    <input type="text" value={formState} onChange={(e) => setFormState(e.target.value)} placeholder="SP" className="mt-1 w-full rounded-lg border border-[#e9ecef] p-2 text-xs outline-none bg-white" />
+                    <input type="text" value={formState} onChange={(e) => setFormState(e.target.value)} placeholder="SP" className="mt-1 w-full rounded-lg border border-[#e9ecef] p-2 text-xs outline-none bg-white text-[#212529]" />
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#495057]">WhatsApp (Agendamentos)</label>
-                  <input required type="text" value={formWhatsapp} onChange={(e) => setFormWhatsapp(e.target.value)} placeholder="11999999999" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2 text-xs outline-none" />
+                  <label className="block text-[10px] font-semibold text-[#495057]">WhatsApp</label>
+                  <input required type="text" value={formWhatsapp} onChange={(e) => setFormWhatsapp(e.target.value)} placeholder="11999999999" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2 text-xs outline-none bg-white text-[#212529]" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#495057]">Telefone Fixo (Opcional)</label>
-                  <input type="text" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} placeholder="1133334444" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2 text-xs outline-none" />
+                  <label className="block text-[10px] font-semibold text-[#495057]">Telefone Fixo</label>
+                  <input type="text" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} placeholder="1133334444" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2 text-xs outline-none bg-white text-[#212529]" />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-[10px] font-semibold text-[#495057]">Link do Google Meu Negócio</label>
-                  <input type="text" value={formGoogleLink} onChange={(e) => setFormGoogleLink(e.target.value)} placeholder="https://g.page/r/..." className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2 text-xs outline-none" />
+                  <input type="text" value={formGoogleLink} onChange={(e) => setFormGoogleLink(e.target.value)} placeholder="https://g.page/r/..." className="mt-1 w-full rounded-xl border border-[#e9ecef] p-2 text-xs outline-none bg-white text-[#212529]" />
                 </div>
               </div>
 
@@ -519,11 +531,11 @@ function SuperAdminView({ onLogout, notify, userEmail }: { onLogout: () => void;
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-[10px] font-semibold text-[#495057]">E-mail</label>
-                    <input required type="email" value={formOwnerEmail} onChange={(e) => setFormOwnerEmail(e.target.value)} className="mt-1 w-full rounded-lg border border-[#e9ecef] p-2 text-xs outline-none bg-white" />
+                    <input required type="email" value={formOwnerEmail} onChange={(e) => setFormOwnerEmail(e.target.value)} className="mt-1 w-full rounded-lg border border-[#e9ecef] p-2 text-xs outline-none bg-white text-[#212529]" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-[#495057]">Senha</label>
-                    <input type="password" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} className="mt-1 w-full rounded-lg border border-[#e9ecef] p-2 text-xs outline-none bg-white" />
+                    <input type="password" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} className="mt-1 w-full rounded-lg border border-[#e9ecef] p-2 text-xs outline-none bg-white text-[#212529]" />
                   </div>
                 </div>
               </div>
@@ -700,9 +712,9 @@ function TenantAdminView({ tenant, onBack, onLogout, notify, isSuperAdmin }: { t
                 )}
                 <input type="file" accept="image/*" onChange={(e) => setProfPhoto(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
               </div>
-              <div><label className="block text-xs font-semibold text-[#495057]">Nome</label><input required type="text" value={profName} onChange={(e) => setProfName(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" /></div>
-              <div><label className="block text-xs font-semibold text-[#495057]">Cargo / Especialidade</label><input required type="text" value={profRole} onChange={(e) => setProfRole(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" /></div>
-              <div><label className="block text-xs font-semibold text-[#495057]">Chave Pix Própria (Opcional)</label><input type="text" value={profPix} onChange={(e) => setProfPix(e.target.value)} placeholder="Celular, CPF ou E-mail" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" /></div>
+              <div><label className="block text-xs font-semibold text-[#495057]">Nome</label><input required type="text" value={profName} onChange={(e) => setProfName(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none bg-white text-[#212529]" /></div>
+              <div><label className="block text-xs font-semibold text-[#495057]">Cargo / Especialidade</label><input required type="text" value={profRole} onChange={(e) => setProfRole(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none bg-white text-[#212529]" /></div>
+              <div><label className="block text-xs font-semibold text-[#495057]">Chave Pix Própria (Opcional)</label><input type="text" value={profPix} onChange={(e) => setProfPix(e.target.value)} placeholder="Celular, CPF ou E-mail" className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none bg-white text-[#212529]" /></div>
               <button type="submit" disabled={isSavingProf} className="mt-6 w-full rounded-xl bg-[#242329] py-3 text-sm font-bold text-white disabled:opacity-50">{isSavingProf ? 'Salvando...' : 'Salvar Membro'}</button>
             </form>
           </div>
@@ -717,9 +729,9 @@ function TenantAdminView({ tenant, onBack, onLogout, notify, isSuperAdmin }: { t
               <button onClick={() => setShowServiceModal(false)} className="text-[#6c757d]"><X size={20} /></button>
             </div>
             <form onSubmit={handleSaveService} className="space-y-4">
-              <div><label className="block text-xs font-semibold text-[#495057]">Nome</label><input required type="text" value={serviceName} onChange={(e) => setServiceName(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" /></div>
-              <div><label className="block text-xs font-semibold text-[#495057]">Duração (Min)</label><input required type="number" value={serviceDuration} onChange={(e) => setServiceDuration(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" /></div>
-              <div><label className="block text-xs font-semibold text-[#495057]">Preço (R$)</label><input required type="number" step="0.01" value={servicePrice} onChange={(e) => setServicePrice(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none" /></div>
+              <div><label className="block text-xs font-semibold text-[#495057]">Nome</label><input required type="text" value={serviceName} onChange={(e) => setServiceName(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none bg-white text-[#212529]" /></div>
+              <div><label className="block text-xs font-semibold text-[#495057]">Duração (Min)</label><input required type="number" value={serviceDuration} onChange={(e) => setServiceDuration(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none bg-white text-[#212529]" /></div>
+              <div><label className="block text-xs font-semibold text-[#495057]">Preço (R$)</label><input required type="number" step="0.01" value={servicePrice} onChange={(e) => setServicePrice(e.target.value)} className="mt-1 w-full rounded-xl border border-[#e9ecef] p-3 text-sm outline-none bg-white text-[#212529]" /></div>
               <button type="submit" className="w-full rounded-xl bg-[#242329] py-3 text-sm font-bold text-white">Salvar Serviço</button>
             </form>
           </div>
@@ -729,7 +741,7 @@ function TenantAdminView({ tenant, onBack, onLogout, notify, isSuperAdmin }: { t
   );
 }
 
-// --- PÁGINA PÚBLICA DE AGENDAMENTO COMPLETA E NAVEGÁVEL ---
+// --- PÁGINA PÚBLICA DE AGENDAMENTO ---
 function BookingPage({ slug, onBack, notify, isStandalone }: { slug: string; onBack: () => void; notify: (msg: string) => void; isStandalone?: boolean }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -854,7 +866,6 @@ END:VCALENDAR`;
 
   return (
     <div className="min-h-screen pb-24 transition-colors" style={{ backgroundColor: themeStyle.bg, color: themeStyle.textPrimary }}>
-      {/* HEADER DA VITRINE */}
       <div className="relative w-full h-48 md:h-64 bg-black/10 overflow-hidden">
         {tenant.photo1_url ? (
           <img src={tenant.photo1_url} alt={tenant.name} className="w-full h-full object-cover" />
@@ -872,7 +883,6 @@ END:VCALENDAR`;
       </div>
 
       <main className="mx-auto max-w-xl px-4 -mt-10 relative z-10">
-        {/* CARD DA EMPRESA */}
         <div className="rounded-3xl border border-black/5 p-5 shadow-sm mb-6" style={{ backgroundColor: themeStyle.cardBg }}>
           <h1 className="font-display font-bold text-2xl tracking-tight">{tenant.name}</h1>
           <div className="flex items-center gap-1 mt-1 font-semibold text-xs opacity-70">
@@ -905,13 +915,12 @@ END:VCALENDAR`;
           </div>
         </div>
 
-        {/* PASSO 1: SERVIÇOS */}
         {step === 1 && (
           <div className="space-y-4">
             <h2 className="font-display text-xl font-bold tracking-tight">Selecione o serviço</h2>
             <div className="space-y-2.5">
               {services.length === 0 ? (
-                <div className="rounded-2xl border border-black/5 p-6 bg-white text-center opacity-60 text-xs" style={{ backgroundColor: themeStyle.cardBg }}>
+                <div className="rounded-2xl border border-black/5 p-6 bg-white text-center opacity-60 text-xs text-[#212529]" style={{ backgroundColor: themeStyle.cardBg }}>
                   Nenhum serviço cadastrado para esta loja ainda.
                 </div>
               ) : (
@@ -932,7 +941,6 @@ END:VCALENDAR`;
           </div>
         )}
 
-        {/* PASSO 2: PROFISSIONAL E HORÁRIO */}
         {step === 2 && (
           <div className="space-y-6">
             <div>
@@ -981,7 +989,6 @@ END:VCALENDAR`;
           </div>
         )}
 
-        {/* PASSO 3: DATOS E PAGAMENTO */}
         {step === 3 && (
           <form onSubmit={submit} className="space-y-4">
             <h2 className="font-display text-xl font-bold">Confirmação e Pagamento</h2>
@@ -996,50 +1003,45 @@ END:VCALENDAR`;
             </div>
 
             <div className="space-y-3 pt-2">
-  <label className="block text-xs font-bold opacity-80">
-    Forma de Pagamento
-    <select value={paymentMethod} onChange={(e: any) => setPaymentMethod(e.target.value)} className="mt-1 w-full rounded-xl border border-black/10 p-3 text-xs outline-none text-[#212529] bg-white">
-      <option value="local">Pagar no local (Após o serviço)</option>
-      {pixKey && <option value="pix">Pagar agora via Pix</option>}
-    </select>
-  </label>
+              <label className="block text-xs font-bold opacity-80">
+                Forma de Pagamento
+                <select value={paymentMethod} onChange={(e: any) => setPaymentMethod(e.target.value)} className="mt-1 w-full rounded-xl border border-black/10 p-3 text-xs outline-none text-[#212529] bg-white">
+                  <option value="local">Pagar no local (Após o serviço)</option>
+                  {pixKey && <option value="pix">Pagar agora via Pix</option>}
+                </select>
+              </label>
 
-  {paymentMethod === 'pix' && pixKey && (
-    <div className="rounded-xl border border-black/10 p-4 text-xs space-y-2.5 bg-white text-[#212529]">
-      <p className="font-bold flex items-center gap-1.5 text-xs text-[#212529]">
-        <DollarSign size={16} className="text-[#2e7d32]" /> Chave Pix para pagamento:
-      </p>
-      <p className="bg-[#f8f9fa] p-2.5 rounded-lg font-mono text-center text-sm font-semibold select-all text-[#212529] border border-[#e9ecef]">
-        {pixKey}
-      </p>
-      <button 
-        type="button" 
-        onClick={copyPix} 
-        className="w-full rounded-xl bg-[#242329] py-2.5 text-white font-bold hover:bg-[#343a40] transition-colors"
-      >
-        {pixCopied ? 'Chave copiada! ✓' : 'Copiar chave Pix'}
-      </button>
-      <p className="text-[11px] text-[#6c757d] text-center font-medium pt-1">
-        💡 Ao concluir o pagamento no Pix, favor encaminhar o comprovante pelo WhatsApp.
-      </p>
-    </div>
-  )}
-  
-  {/* CAMPOS COM COR DE TEXTO FORÇADA PARA ESCURO (#212529) */}
-  <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu Nome Completo" className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white text-[#212529]" />
-  <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Seu WhatsApp" className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white text-[#212529]" />
-  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações (opcional)..." rows={2} className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white text-[#212529]" />
-</div>
-              <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu Nome Completo" className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white" />
-              <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Seu WhatsApp" className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white" />
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações (opcional)..." rows={2} className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white" />
+              {paymentMethod === 'pix' && pixKey && (
+                <div className="rounded-xl border border-black/10 p-4 text-xs space-y-2.5 bg-white text-[#212529]">
+                  <p className="font-bold flex items-center gap-1.5 text-xs text-[#212529]">
+                    <DollarSign size={16} className="text-[#2e7d32]" /> Chave Pix para pagamento:
+                  </p>
+                  <p className="bg-[#f8f9fa] p-2.5 rounded-lg font-mono text-center text-sm font-semibold select-all text-[#212529] border border-[#e9ecef]">
+                    {pixKey}
+                  </p>
+                  <button 
+                    type="button" 
+                    onClick={copyPix} 
+                    className="w-full rounded-xl bg-[#242329] py-2.5 text-white font-bold hover:bg-[#343a40] transition-colors"
+                  >
+                    {pixCopied ? 'Chave copiada! ✓' : 'Copiar chave Pix'}
+                  </button>
+                  <p className="text-[11px] text-[#6c757d] text-center font-medium pt-1">
+                    💡 Ao concluir o pagamento no Pix, favor encaminhar o comprovante pelo WhatsApp.
+                  </p>
+                </div>
+              )}
+
+              {/* CAMPOS COM TEXTO ESCURO GARANTIDO EM QUALQUER TEMA */}
+              <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu Nome Completo" className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white text-[#212529]" />
+              <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Seu WhatsApp" className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white text-[#212529]" />
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações (opcional)..." rows={2} className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white text-[#212529]" />
             </div>
 
             <button type="submit" className="w-full rounded-2xl bg-[#0e7490] py-4 text-sm font-bold text-white shadow-lg">Confirmar e Agendar</button>
           </form>
         )}
 
-        {/* PASSO 4: CONFIRMAÇÃO FINAL */}
         {step === 4 && (
           <div className="rounded-3xl border border-black/5 p-6 text-center space-y-5 bg-white shadow-sm my-6" style={{ backgroundColor: themeStyle.cardBg }}>
             <div className="mx-auto h-20 w-20 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600">
