@@ -4,7 +4,7 @@ import {
   Store, WalletCards, BarChart3, CalendarDays, Search, Link2, Copy, Check,
   Pencil, Trash2, Plus, ArrowLeft, X, Users, CheckCircle2, ExternalLink,
   Palette, LogOut, Lock, Mail, KeyRound, Star, Camera, DollarSign, AlertCircle,
-  MapPin, Phone, StarHalf
+  MapPin, Phone
 } from 'lucide-react';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -357,16 +357,21 @@ function SuperAdminView({ onLogout, notify, userEmail }: { onLogout: () => void;
           <span className="font-display font-bold text-xl tracking-tight">Marcô.</span>
         </div>
         <nav className="space-y-1">
-          <button className="flex w-full items-center gap-3 rounded-xl bg-[#242329] px-4 py-3 text-sm font-semibold text-white"><Store size={18} /> Lojas Clientes</button>
+          <button className="flex w-full items-center gap-3 rounded-xl bg-[#242329] px-4 py-3 text-sm font-semibold text-white"><Store size={18} /> Estabelecimentos</button>
           <button onClick={onLogout} className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-[#d94e70] hover:bg-[#fde8ed]"><LogOut size={18} /> Sair</button>
         </nav>
       </aside>
 
       <main className="flex-1 p-4 md:p-10">
         <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="font-display text-2xl md:text-3xl font-bold">Lojas Clientes</h1>
-            <p className="text-xs md:text-sm text-[#6c757d]">Gerenciamento de assinantes ({tenants.length} lojas)</p>
+          <div className="flex items-center justify-between w-full md:w-auto">
+            <div>
+              <h1 className="font-display text-2xl md:text-3xl font-bold">Painel Master</h1>
+              <p className="text-xs md:text-sm text-[#6c757d]">Gerenciamento de estabelecimentos ({tenants.length} lojas)</p>
+            </div>
+            <button onClick={onLogout} className="md:hidden flex items-center gap-1.5 rounded-xl bg-red-50 border border-red-100 px-3 py-2 text-xs font-bold text-[#d94e70]">
+              <LogOut size={15} /> Sair
+            </button>
           </div>
           <button onClick={handleOpenCreateModal} className="flex items-center justify-center gap-2 rounded-xl bg-[#242329] px-5 py-3 text-sm font-bold text-white hover:bg-[#343a40]"><Plus size={18} /> Cadastrar Nova Loja</button>
         </header>
@@ -899,14 +904,6 @@ END:VCALENDAR`;
       <main className="mx-auto max-w-xl px-4 -mt-10 relative z-10">
         <div className="rounded-3xl border border-black/5 p-5 shadow-sm mb-6" style={{ backgroundColor: themeStyle.cardBg }}>
           <h1 className="font-display font-bold text-2xl tracking-tight">{tenant.name}</h1>
-          <div className="flex items-center gap-1 mt-1 font-semibold text-xs opacity-70">
-            <Star size={12} className="text-amber-500" fill="currentColor" />
-            <Star size={12} className="text-amber-500" fill="currentColor" />
-            <Star size={12} className="text-amber-500" fill="currentColor" />
-            <Star size={12} className="text-amber-500" fill="currentColor" />
-            <StarHalf size={12} className="text-amber-500" fill="currentColor" />
-            <span className="ml-1">(5.0)</span>
-          </div>
 
           <div className="mt-3 flex flex-wrap gap-1.5">
             {tenant.categories?.map(c => (
@@ -922,8 +919,8 @@ END:VCALENDAR`;
               </div>
             )}
             {tenant.google_review_link && (
-              <a href={tenant.google_review_link} target="_blank" rel="noopener noreferrer" className="mt-2 flex items-center justify-center gap-2 w-full py-2 rounded-xl border border-black/10 text-xs font-bold hover:bg-black/5">
-                <Star size={14} /> Ver avaliações no Google
+              <a href={tenant.google_review_link} target="_blank" rel="noopener noreferrer" className="mt-2 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-black/10 text-xs font-bold hover:bg-black/5 transition-colors">
+                <Star size={14} className="text-amber-500" fill="currentColor" /> Ver avaliações no Google
               </a>
             )}
           </div>
@@ -978,7 +975,6 @@ END:VCALENDAR`;
                         )}
                       </div>
                       <span className="text-xs font-bold line-clamp-1">{p.name}</span>
-                      <div className="flex items-center gap-0.5 text-[10px] text-amber-600 font-bold mt-0.5"><Star size={10} fill="currentColor" /> 5.0</div>
                     </div>
                   );
                 })}
