@@ -61,7 +61,6 @@ export default function App() {
       }
 
       const { data: { session } } = await client.auth.getSession();
-      
       const urlParams = new URLSearchParams(window.location.search);
       const adminTenantTarget = urlParams.get('admin_tenant');
 
@@ -424,7 +423,6 @@ function SuperAdminView({ onLogout, notify, userEmail }: { onLogout: () => void;
         </div>
       </main>
 
-      {/* MODAL COM A OPÇÃO RESTAURADA DE ESCOLHA DE TEMA */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 overflow-y-auto">
           <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl my-auto">
@@ -478,7 +476,6 @@ function SuperAdminView({ onLogout, notify, userEmail }: { onLogout: () => void;
                 </div>
               </div>
 
-              {/* TEMA VISUAL DA PÁGINA (RESTAURADO) */}
               <div className="bg-[#f8f9fa] p-3 rounded-xl border border-[#e9ecef]">
                 <label className="block font-bold text-[#212529] mb-2 flex items-center gap-1 text-xs"><Palette size={14} className="text-[#805d4e]" /> Tema Visual da Página Pública</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -551,7 +548,7 @@ function SuperAdminView({ onLogout, notify, userEmail }: { onLogout: () => void;
   );
 }
 
-// --- DASHBOARD DO ESTABELECIMENTO ---
+// --- DASHBOARD DO ESTABELECIMENTO (COM MENU RESPONSIVO MOBILE) ---
 function TenantAdminView({ tenant, onBack, onLogout, notify, isSuperAdmin }: { tenant: Tenant; onBack: () => void; onLogout: () => void; notify: (msg: string) => void; isSuperAdmin: boolean }) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'professionals'>('dashboard');
   const [services, setServices] = useState<Service[]>([]);
@@ -628,13 +625,30 @@ function TenantAdminView({ tenant, onBack, onLogout, notify, isSuperAdmin }: { t
         </nav>
       </aside>
 
-      <main className="flex-1 p-4 md:p-10">
-        <header className="mb-6 flex items-center justify-between">
-          <div><h1 className="font-display text-xl md:text-2xl font-bold">Meu Negócio</h1></div>
-          <a href={`/${tenant.slug}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-xl bg-white border border-[#e9ecef] px-3 py-2 text-xs font-bold text-[#212529] shadow-sm">
-            <ExternalLink size={14} /> Ver Minha Página Pública
-          </a>
+      <main className="flex-1 p-4 md:p-10 pb-24 md:pb-10">
+        <header className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="font-display text-xl md:text-2xl font-bold">{tenant.name}</h1>
+            <p className="text-xs text-[#6c757d]">Painel de Gerenciamento</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isSuperAdmin && (
+              <button onClick={onBack} className="md:hidden flex items-center gap-1 rounded-xl bg-white border border-[#e9ecef] px-3 py-2 text-xs font-bold text-[#212529] shadow-sm">
+                <ArrowLeft size={14} /> Voltar
+              </button>
+            )}
+            <a href={`/${tenant.slug}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-xl bg-white border border-[#e9ecef] px-3 py-2 text-xs font-bold text-[#212529] shadow-sm">
+              <ExternalLink size={14} /> Ver Página
+            </a>
+          </div>
         </header>
+
+        <div className="flex md:hidden gap-1.5 mb-6 overflow-x-auto pb-1">
+          <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-[#242329] text-white' : 'bg-white border text-[#495057]'}`}>Visão Geral</button>
+          <button onClick={() => setActiveTab('services')} className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap ${activeTab === 'services' ? 'bg-[#242329] text-white' : 'bg-white border text-[#495057]'}`}>Serviços ({services.length})</button>
+          <button onClick={() => setActiveTab('professionals')} className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap ${activeTab === 'professionals' ? 'bg-[#242329] text-white' : 'bg-white border text-[#495057]'}`}>Equipe ({professionals.length})</button>
+          <button onClick={onLogout} className="px-4 py-2 rounded-xl text-xs font-bold text-[#d94e70] bg-red-50 border border-red-100 whitespace-nowrap">Sair</button>
+        </div>
 
         {activeTab === 'dashboard' && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -1032,7 +1046,6 @@ END:VCALENDAR`;
                 </div>
               )}
 
-              {/* CAMPOS COM TEXTO ESCURO GARANTIDO EM QUALQUER TEMA */}
               <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu Nome Completo" className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white text-[#212529]" />
               <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Seu WhatsApp" className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white text-[#212529]" />
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações (opcional)..." rows={2} className="w-full rounded-xl border border-black/10 p-3 text-xs outline-none bg-white text-[#212529]" />
